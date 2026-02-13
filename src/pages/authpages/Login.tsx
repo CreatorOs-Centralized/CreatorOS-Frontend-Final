@@ -1,37 +1,16 @@
-import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff, Zap, AlertCircle } from "lucide-react";
+import { Zap, AlertCircle, Loader2 } from "lucide-react";
 
 const Login = () => {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const { login, isAuthenticated } = useAuth();
-  const navigate = useNavigate();
-
-  const AUTO_LOGIN_STARTED_KEY = "creatoros.auth.autoLogin.started";
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      const loginFlowStarted = sessionStorage.getItem(AUTO_LOGIN_STARTED_KEY) === "1";
-      sessionStorage.removeItem(AUTO_LOGIN_STARTED_KEY);
-
-      if (loginFlowStarted) {
-        const redirect = sessionStorage.getItem("creatoros.auth.postLoginRedirect") || "/dashboard";
-        sessionStorage.removeItem("creatoros.auth.postLoginRedirect");
-        navigate(redirect);
-      } else {
-        sessionStorage.removeItem("creatoros.auth.postLoginRedirect");
-        navigate("/dashboard");
-      }
-    }
-  }, [isAuthenticated, navigate]);
+  const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,15 +18,13 @@ const Login = () => {
     setLoading(true);
 
     try {
-      sessionStorage.setItem("creatoros.auth.postLoginRedirect", "/dashboard");
-      sessionStorage.setItem(AUTO_LOGIN_STARTED_KEY, "1");
-      
-      // Login with email hint for Keycloak
-      await login(email, password);
+      // Login with optional email hint for Keycloak
+      await login(email, "");
       // Note: login will redirect to Keycloak, so we don't navigate immediately
     } catch (err) {
-      sessionStorage.removeItem(AUTO_LOGIN_STARTED_KEY);
-      setError(err instanceof Error ? err.message : "Login failed. Please try again.");
+      setError(
+        err instanceof Error ? err.message : "Login failed. Please try again.",
+      );
       setLoading(false);
     }
   };
@@ -57,11 +34,8 @@ const Login = () => {
     setLoading(true);
 
     try {
-      sessionStorage.setItem("creatoros.auth.postLoginRedirect", "/dashboard");
-      sessionStorage.setItem(AUTO_LOGIN_STARTED_KEY, "1");
-      await login(email, password);
+      await login(email, "");
     } catch (err) {
-      sessionStorage.removeItem(AUTO_LOGIN_STARTED_KEY);
       setError(err instanceof Error ? err.message : "Login failed");
       setLoading(false);
     }
@@ -75,7 +49,11 @@ const Login = () => {
             <Zap className="w-4 h-4" /> CreatorOS
           </div>
           <h1 className="text-3xl font-bold tracking-tight">Welcome back</h1>
-          <p className="text-muted-foreground">Sign in to your creator dashboard</p>
+          <p className="text-muted-foreground">
+            {loading
+              ? "Redirecting you to Keycloak..."
+              : "You will sign in on Keycloak"}
+          </p>
         </div>
 
         <div className="glass rounded-xl p-6">
@@ -89,55 +67,42 @@ const Login = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input 
-                id="email" 
-                type="email" 
-                placeholder="you@example.com" 
-                value={email} 
-                onChange={e => setEmail(e.target.value)} 
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 disabled={loading}
-                required 
+                required={false}
               />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Input 
-                  id="password" 
-                  type={showPass ? "text" : "password"} 
-                  placeholder="••••••••" 
-                  value={password} 
-                  onChange={e => setPassword(e.target.value)} 
-                  disabled={loading}
-                  required 
-                />
-                <button 
-                  type="button" 
-                  onClick={() => setShowPass(!showPass)} 
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  disabled={loading}
-                >
-                  {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Optional: used as an email hint for Keycloak
+              </p>
             </div>
 
             <div className="flex justify-end">
-              <Link 
-                to="/forgot-password" 
+              <Link
+                to="/forgot-password"
                 className="text-sm text-primary hover:underline"
               >
                 Forgot password?
               </Link>
             </div>
 
-            <Button 
-              type="submit" 
-              className="w-full gradient-primary border-0" 
+            <Button
+              type="submit"
+              className="w-full gradient-primary border-0"
               disabled={loading}
             >
-              {loading ? "Redirecting to Keycloak..." : "Sign In"}
+              {loading ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Redirecting to
+                  Keycloak...
+                </span>
+              ) : (
+                "Continue to Keycloak"
+              )}
             </Button>
 
             {error && (
@@ -156,8 +121,8 @@ const Login = () => {
           <div className="mt-6 text-center">
             <p className="text-sm text-muted-foreground">
               Don't have an account?{" "}
-              <Link 
-                to="/register" 
+              <Link
+                to="/register"
                 className="text-primary hover:underline font-medium"
               >
                 Create one now

@@ -1,9 +1,16 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useMemo,
+} from "react";
 import type { User, CreatorProfile } from "@/types";
 import {
   getKeycloakConfig,
   getKeycloakLoginUrl,
   getKeycloakRegisterUrl,
+  getKeycloakLogoutUrl,
   getRedirectUri,
 } from "../auth/config";
 import {
@@ -30,6 +37,7 @@ interface AuthContextType {
   user: User | null;
   profile: CreatorProfile | null;
   isLoading: boolean;
+  isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => void;
@@ -59,31 +67,55 @@ export const useAuth = () => {
 
 const calcCompletion = (p: CreatorProfile | null): number => {
   if (!p) return 0;
-  const fields = ['username', 'display_name', 'bio', 'niche', 'profile_photo_url', 'location', 'language', 'fullName', 'dateOfBirth', 'instagramToken', 'youtubeToken'] as const;
-  const filled = fields.filter(f => p[f] && p[f].trim() !== '').length;
+  const fields = [
+    "username",
+    "display_name",
+    "bio",
+    "niche",
+    "profile_photo_url",
+    "location",
+    "language",
+    "fullName",
+    "dateOfBirth",
+    "instagramToken",
+    "youtubeToken",
+  ] as const;
+  const filled = fields.filter((f) => p[f] && p[f].trim() !== "").length;
   return Math.round((filled / fields.length) * 100);
 };
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<CreatorProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [tokens, setTokens] = useState<StoredTokens | null>(null);
 
   const keycloakCfg = useMemo(() => getKeycloakConfig(), []);
-  const CALLBACK_STATE_KEY = "creatoros.kc.state";
-  const CALLBACK_VERIFIER_KEY = "creatoros.kc.verifier";
+  const VERIFIER_PREFIX = "creatoros.kc.verifier.";
+  const CALLBACK_CODE_GUARD_PREFIX = "creatoros.kc.cb.guard.";
+  const PROFILE_KEY_PREFIX = "creatoros_profile.";
+
+  const profileKeyForUserId = (userId: string) =>
+    `${PROFILE_KEY_PREFIX}${userId}`;
 
   // Helper function to map Keycloak user to our User type
-  const mapKeycloakUserToUser = (kcUser: KeycloakUser, storedProfile?: CreatorProfile | null): User => {
+  const mapKeycloakUserToUser = (
+    kcUser: KeycloakUser,
+    storedProfile?: CreatorProfile | null,
+  ): User => {
     return {
       id: kcUser.id,
-      email: kcUser.email || null,
+      email: kcUser.email ?? null,
       username: kcUser.username || null,
       is_email_verified: kcUser.isEmailVerified || false,
       is_active: true,
       created_at: new Date().toISOString(),
-      isProfileComplete: storedProfile ? true : kcUser.isProfileComplete || false,
+      isProfileComplete: storedProfile
+        ? true
+        : kcUser.isProfileComplete || false,
+      profileData: storedProfile ?? kcUser.profileData,
     };
   };
 
@@ -115,23 +147,78 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const returnedState = url.searchParams.get("state");
       const error = url.searchParams.get("error");
 
+      // React 18 StrictMode intentionally double-invokes effects in dev.
+      // Guard callback processing per authorization `code` so the verifier isn't consumed twice.
+      if (code) {
+        const guardKey = `${CALLBACK_CODE_GUARD_PREFIX}${code}`;
+        const existing = sessionStorage.getItem(guardKey);
+        const now = Date.now();
+        const previous = existing ? Number(existing) : NaN;
+        const recentlyHandled =
+          Number.isFinite(previous) && now - previous < 30_000;
+        if (recentlyHandled) {
+          url.searchParams.delete("code");
+          url.searchParams.delete("state");
+          url.searchParams.delete("session_state");
+          url.searchParams.delete("iss");
+          window.history.replaceState(
+            {},
+            document.title,
+            url.pathname + url.search + url.hash,
+          );
+          setIsLoading(false);
+          return;
+        }
+        sessionStorage.setItem(guardKey, String(now));
+      }
+
       if (error) {
         url.searchParams.delete("error");
         url.searchParams.delete("error_description");
         url.searchParams.delete("state");
-        window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+        window.history.replaceState(
+          {},
+          document.title,
+          url.pathname + url.search + url.hash,
+        );
         setIsLoading(false);
         return;
       }
 
       if (code) {
-        const expectedState = sessionStorage.getItem(CALLBACK_STATE_KEY);
-        const verifier = sessionStorage.getItem(CALLBACK_VERIFIER_KEY);
-        sessionStorage.removeItem(CALLBACK_STATE_KEY);
-        sessionStorage.removeItem(CALLBACK_VERIFIER_KEY);
+        const verifierKey = returnedState
+          ? `${VERIFIER_PREFIX}${returnedState}`
+          : null;
+        const verifier = verifierKey
+          ? sessionStorage.getItem(verifierKey)
+          : null;
+        if (verifierKey) sessionStorage.removeItem(verifierKey);
 
         try {
-          if (!verifier || !expectedState || !returnedState || expectedState !== returnedState) {
+          if (!returnedState || !verifier) {
+            // Common case: user navigated back to an old Keycloak login page and submitted it again.
+            // The PKCE verifier was already consumed, so we can't validate this callback.
+            // If we already have a valid session, keep it and don't treat this as an error.
+            try {
+              const restoredTokens = loadTokens();
+              const restoredUser = loadUser<KeycloakUser>();
+              const restoredProfile = restoredUser?.id
+                ? loadUser<CreatorProfile>(profileKeyForUserId(restoredUser.id))
+                : null;
+
+              if (restoredTokens && restoredUser) {
+                await getMe(restoredTokens.accessToken);
+                setTokens(restoredTokens);
+                setUser(mapKeycloakUserToUser(restoredUser, restoredProfile));
+                if (restoredProfile)
+                  setProfile(mapStoredProfile(restoredProfile));
+                setIsLoading(false);
+                return;
+              }
+            } catch {
+              // fall through
+            }
+
             throw new Error("Invalid login state. Please try again.");
           }
 
@@ -141,7 +228,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             getRedirectUri(),
             keycloakCfg,
           );
-          
+
           const stored: StoredTokens = {
             accessToken: tokenResponse.access_token,
             refreshToken: tokenResponse.refresh_token,
@@ -152,94 +239,118 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setTokens(stored);
 
           const synced = await syncCurrentUser(stored.accessToken);
-          const previouslyStored = loadUser<KeycloakUser>();
-          const storedProfile = loadUser<CreatorProfile>("creatoros_profile");
-          
-          const isSameUser = previouslyStored?.id === synced.id;
-          
+          const storedProfile = loadUser<CreatorProfile>(
+            profileKeyForUserId(synced.id),
+          );
+          const mappedStoredProfile = mapStoredProfile(storedProfile);
+          const storedCompletion = mappedStoredProfile
+            ? calcCompletion(mappedStoredProfile)
+            : 0;
+
           const kcUser: KeycloakUser = {
             id: synced.id,
             email: synced.email,
             username: synced.username,
             roles: synced.roles,
-            isEmailVerified: synced.email_verified,
-            isProfileComplete: isSameUser ? (previouslyStored?.isProfileComplete ?? false) : false,
-            profileData: isSameUser ? mapStoredProfile(storedProfile) : undefined,
+            isEmailVerified: false,
+            isProfileComplete: storedCompletion >= 100,
+            profileData: mappedStoredProfile ?? undefined,
           };
 
           const mappedUser = mapKeycloakUserToUser(kcUser, kcUser.profileData);
           setUser(mappedUser);
-          
+
           if (kcUser.profileData) {
             setProfile(kcUser.profileData);
           }
-          
+
           saveUser(kcUser);
           setIsLoading(false);
         } catch (error) {
           console.error("Auth callback error:", error);
+
           setUser(null);
           setProfile(null);
           setTokens(null);
           clearTokens();
           clearUser();
+          // Allow retry if callback failed.
+          if (code)
+            sessionStorage.removeItem(`${CALLBACK_CODE_GUARD_PREFIX}${code}`);
           setIsLoading(false);
         } finally {
           url.searchParams.delete("code");
           url.searchParams.delete("state");
           url.searchParams.delete("session_state");
           url.searchParams.delete("iss");
-          window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+          window.history.replaceState(
+            {},
+            document.title,
+            url.pathname + url.search + url.hash,
+          );
         }
         return;
       }
       setIsLoading(false);
     })();
+  }, []);
 
-    // Restore existing session
+  // Restore existing session (separate effect to avoid racing the OAuth callback).
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const hasAuthCode = Boolean(url.searchParams.get("code"));
+    if (hasAuthCode) return;
+
     const restoredTokens = loadTokens();
     const restoredUser = loadUser<KeycloakUser>();
-    const restoredProfile = loadUser<CreatorProfile>("creatoros_profile");
+    const restoredProfile = restoredUser?.id
+      ? loadUser<CreatorProfile>(profileKeyForUserId(restoredUser.id))
+      : null;
 
-    if (restoredTokens) {
-      setTokens(restoredTokens);
-      
-      if (restoredUser) {
-        const mappedUser = mapKeycloakUserToUser(restoredUser, restoredProfile);
-        setUser(mappedUser);
-      }
-      
-      if (restoredProfile) {
-        setProfile(mapStoredProfile(restoredProfile));
-      }
+    if (!restoredTokens) return;
 
-      // Validate token
-      (async () => {
-        try {
-          const me = await getMe(restoredTokens.accessToken);
-          const hydrated: KeycloakUser = {
-            id: me.id,
-            email: me.email,
-            username: me.username,
-            roles: me.roles,
-            isEmailVerified: me.email_verified,
-            isProfileComplete: restoredUser?.isProfileComplete ?? false,
-            profileData: restoredProfile || undefined,
-          };
-          
-          const mappedUser = mapKeycloakUserToUser(hydrated, restoredProfile);
-          setUser(mappedUser);
-          saveUser(hydrated);
-        } catch (error) {
-          console.error("Token validation failed:", error);
-          setUser(null);
-          setProfile(null);
-          setTokens(null);
-          clearTokens();
-          clearUser();
-        }
-      })();
+    setTokens(restoredTokens);
+
+    if (restoredUser) {
+      const mappedUser = mapKeycloakUserToUser(restoredUser, restoredProfile);
+      setUser(mappedUser);
     }
+
+    if (restoredProfile) {
+      setProfile(mapStoredProfile(restoredProfile));
+    }
+
+    // Validate token
+    (async () => {
+      try {
+        const me = await getMe(restoredTokens.accessToken);
+        const mappedRestored = restoredProfile
+          ? mapStoredProfile(restoredProfile)
+          : null;
+        const hydrated: KeycloakUser = {
+          id: me.id,
+          email: me.email,
+          username: me.username,
+          roles: me.roles,
+          isEmailVerified: false,
+          isProfileComplete: Boolean(
+            mappedRestored && calcCompletion(mappedRestored) >= 100,
+          ),
+          profileData: mappedRestored ?? undefined,
+        };
+
+        const mappedUser = mapKeycloakUserToUser(hydrated, restoredProfile);
+        setUser(mappedUser);
+        saveUser(hydrated);
+      } catch (error) {
+        console.error("Token validation failed:", error);
+        setUser(null);
+        setProfile(null);
+        setTokens(null);
+        clearTokens();
+        clearUser();
+      }
+    })();
   }, []);
 
   const getValidAccessToken = async (): Promise<string> => {
@@ -254,7 +365,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error("Session expired");
     }
 
-    const refreshed = await refreshAccessToken(current.refreshToken, keycloakCfg);
+    const refreshed = await refreshAccessToken(
+      current.refreshToken,
+      keycloakCfg,
+    );
     const updated: StoredTokens = {
       accessToken: refreshed.access_token,
       refreshToken: refreshed.refresh_token ?? current.refreshToken,
@@ -265,12 +379,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return updated.accessToken;
   };
 
-  const beginAuthRedirect = async (mode: "login" | "register", emailHint?: string) => {
+  const beginAuthRedirect = async (
+    mode: "login" | "register",
+    emailHint?: string,
+  ) => {
     const { verifier, challenge } = await createPkcePair();
     const state = createState();
 
-    sessionStorage.setItem(CALLBACK_VERIFIER_KEY, verifier);
-    sessionStorage.setItem(CALLBACK_STATE_KEY, state);
+    // Store verifier keyed by state to avoid overwriting when multiple auth attempts happen.
+    sessionStorage.setItem(`${VERIFIER_PREFIX}${state}`, verifier);
 
     if (mode === "register") {
       window.location.href =
@@ -281,7 +398,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    const loginUrl = getKeycloakLoginUrl(keycloakCfg, { login_hint: emailHint });
+    const loginUrl = getKeycloakLoginUrl(keycloakCfg, {
+      login_hint: emailHint,
+    });
     window.location.href =
       loginUrl +
       `&code_challenge=${encodeURIComponent(challenge)}` +
@@ -301,6 +420,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     (async () => {
+      const postLogoutRedirectUri = `${window.location.origin}/?postLogout=1`;
       try {
         const token = await getValidAccessToken();
         await logoutFromAuthService(token);
@@ -309,16 +429,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } finally {
         sessionStorage.removeItem("creatoros.auth.autoLogin.started");
         sessionStorage.removeItem("creatoros.auth.autoRegister.started");
-        sessionStorage.removeItem(CALLBACK_STATE_KEY);
-        sessionStorage.removeItem(CALLBACK_VERIFIER_KEY);
-        
+
         setUser(null);
         setProfile(null);
         setTokens(null);
-        
+
         clearTokens();
         clearUser();
-        localStorage.removeItem("creatoros_profile");
+
+        // Clear Keycloak SSO session too. Without this, trying to register a new user
+        // while still authenticated can trigger: "already authenticated as different user".
+        try {
+          window.location.href = getKeycloakLogoutUrl(
+            keycloakCfg,
+            postLogoutRedirectUri,
+          );
+        } catch (e) {
+          console.error("Failed to redirect to Keycloak logout:", e);
+          window.location.href = "/";
+        }
       }
     })();
   };
@@ -326,25 +455,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateProfile = async (updates: Partial<CreatorProfile>) => {
     try {
       const token = await getValidAccessToken();
-      
+
       const newProfile = {
         ...profile,
         ...updates,
         user_id: user?.id || "1",
         id: profile?.id || "1",
       } as CreatorProfile;
-      
+
       setProfile(newProfile);
-      localStorage.setItem("creatoros_profile", JSON.stringify(newProfile));
-      
+      if (user?.id) {
+        saveUser(newProfile, profileKeyForUserId(user.id));
+      }
+
       // Update user's profile completion status
       if (user) {
         const updatedUser = {
           ...user,
           isProfileComplete: calcCompletion(newProfile) >= 100,
+          profileData: newProfile,
         };
         setUser(updatedUser);
-        
+
         const kcUser = loadUser<KeycloakUser>();
         if (kcUser) {
           saveUser({
@@ -354,10 +486,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
         }
       }
-      
+
       // Here you would typically also sync with your backend
       // await syncUserProfile(token, newProfile);
-      
     } catch (error) {
       console.error("Failed to update profile:", error);
       throw error;
@@ -365,26 +496,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const sendPasswordReset = async (email: string) => {
-    // Keycloak password reset flow
-    // Redirect to Keycloak's forgot password page
-    const { verifier, challenge } = await createPkcePair();
-    const state = createState();
-    
-    sessionStorage.setItem(CALLBACK_VERIFIER_KEY, verifier);
-    sessionStorage.setItem(CALLBACK_STATE_KEY, state);
-    
-    const resetUrl = `${keycloakCfg.url}/realms/${keycloakCfg.realm}/protocol/openid-connect/auth?` +
-      `client_id=${keycloakCfg.clientId}&` +
-      `response_type=code&` +
-      `redirect_uri=${encodeURIComponent(getRedirectUri())}&` +
-      `scope=openid email profile&` +
-      `kc_action=UPDATE_PASSWORD&` +
-      `login_hint=${encodeURIComponent(email)}&` +
-      `code_challenge=${encodeURIComponent(challenge)}&` +
-      `code_challenge_method=S256&` +
-      `state=${encodeURIComponent(state)}`;
-    
-    window.location.href = resetUrl;
+    // Redirect to Keycloak's built-in forgot-credentials flow.
+    // We do not process any callback here; Keycloak handles the email flow.
+    const base = `${keycloakCfg.baseUrl}/realms/${encodeURIComponent(keycloakCfg.realm)}/protocol/openid-connect/forgot-credentials`;
+    const url = new URL(base, window.location.origin);
+    url.searchParams.set("client_id", keycloakCfg.clientId);
+    url.searchParams.set("redirect_uri", getRedirectUri());
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("scope", "openid");
+    if (email) url.searchParams.set("login_hint", email);
+    window.location.href = url.toString();
   };
 
   const deleteAccount = async () => {
@@ -392,7 +513,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const token = await getValidAccessToken();
       // Call your backend API to delete the account
       // await deleteUserAccount(token);
-      
+
       // Logout after deletion
       logout();
     } catch (error) {
@@ -407,6 +528,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         profile,
         isLoading,
+        isAuthenticated: Boolean(user),
         login,
         register,
         logout,

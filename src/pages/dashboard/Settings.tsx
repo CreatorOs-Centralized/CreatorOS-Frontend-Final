@@ -4,14 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { 
-  User, 
-  Bell, 
-  Shield, 
-  Mail, 
+import {
+  User,
+  Bell,
+  Shield,
+  Mail,
   AlertTriangle,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
 } from "lucide-react";
 import { useState } from "react";
 import {
@@ -25,9 +25,16 @@ import {
 import { useNavigate } from "react-router-dom";
 
 const Settings = () => {
-  const { user, profile, updateProfile, sendPasswordReset, deleteAccount, logout } = useAuth();
+  const {
+    user,
+    profile,
+    updateProfile,
+    sendPasswordReset,
+    deleteAccount,
+    logout,
+  } = useAuth();
   const navigate = useNavigate();
-  
+
   // Profile edit state
   const [displayName, setDisplayName] = useState(profile?.display_name || "");
   const [username, setUsername] = useState(profile?.username || "");
@@ -50,7 +57,7 @@ const Settings = () => {
   const handleSaveProfile = async () => {
     setIsSaving(true);
     setSaveSuccess(false);
-    
+
     try {
       await updateProfile({
         display_name: displayName,
@@ -74,7 +81,7 @@ const Settings = () => {
 
     setIsSendingReset(true);
     setResetError("");
-    
+
     try {
       await sendPasswordReset(user.email);
       setResetSent(true);
@@ -94,11 +101,10 @@ const Settings = () => {
 
     setIsDeleting(true);
     setDeleteError("");
-    
+
     try {
       await deleteAccount();
-      await logout();
-      navigate("/login", { replace: true });
+      logout();
     } catch (error) {
       console.error("Failed to delete account:", error);
       setDeleteError("Failed to delete account. Please try again.");
@@ -111,7 +117,9 @@ const Settings = () => {
     <div className="space-y-6 max-w-2xl">
       <div>
         <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-muted-foreground text-sm">Manage your account preferences</p>
+        <p className="text-muted-foreground text-sm">
+          Manage your account preferences
+        </p>
       </div>
 
       <Card className="p-6 bg-card border-border space-y-4">
@@ -122,8 +130,8 @@ const Settings = () => {
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Display Name</Label>
-            <Input 
-              value={displayName} 
+            <Input
+              value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="Your display name"
             />
@@ -134,24 +142,24 @@ const Settings = () => {
           </div>
           <div className="space-y-2">
             <Label>Username</Label>
-            <Input 
-              value={username} 
+            <Input
+              value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="@username"
             />
           </div>
           <div className="space-y-2">
             <Label>Location</Label>
-            <Input 
-              value={location} 
+            <Input
+              value={location}
               onChange={(e) => setLocation(e.target.value)}
               placeholder="City, Country"
             />
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Button 
-            onClick={handleSaveProfile} 
+          <Button
+            onClick={handleSaveProfile}
             className="gradient-primary border-0"
             disabled={isSaving}
           >
@@ -182,11 +190,17 @@ const Settings = () => {
           {[
             { label: "Email notifications", desc: "Receive email alerts" },
             { label: "Push notifications", desc: "Browser push notifications" },
-            { label: "Publish success alerts", desc: "When content is published" },
+            {
+              label: "Publish success alerts",
+              desc: "When content is published",
+            },
             { label: "Publish failure alerts", desc: "When publishing fails" },
             { label: "Schedule reminders", desc: "Upcoming scheduled posts" },
-          ].map(n => (
-            <div key={n.label} className="flex items-center justify-between py-2">
+          ].map((n) => (
+            <div
+              key={n.label}
+              className="flex items-center justify-between py-2"
+            >
               <div>
                 <p className="text-sm font-medium">{n.label}</p>
                 <p className="text-xs text-muted-foreground">{n.desc}</p>
@@ -202,18 +216,20 @@ const Settings = () => {
           <Shield className="w-4 h-4 text-primary" />
           <h2 className="font-semibold">Security</h2>
         </div>
-        
+
         <div className="space-y-3">
           {/* Password Reset */}
           <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
             <div>
               <p className="text-sm font-medium">Password</p>
               <p className="text-xs text-muted-foreground">
-                {user?.email ? `Reset instructions will be sent to ${user.email}` : "Change your password"}
+                {user?.email
+                  ? `Reset instructions will be sent to ${user.email}`
+                  : "Change your password"}
               </p>
             </div>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setResetDialogOpen(true)}
               className="gap-2"
             >
@@ -225,13 +241,15 @@ const Settings = () => {
           {/* Delete Account */}
           <div className="flex items-center justify-between p-3 bg-destructive/5 rounded-lg border border-destructive/20">
             <div>
-              <p className="text-sm font-medium text-destructive">Delete Account</p>
+              <p className="text-sm font-medium text-destructive">
+                Delete Account
+              </p>
               <p className="text-xs text-muted-foreground">
                 Permanently delete your account and all associated data
               </p>
             </div>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="destructive"
               onClick={() => setDeleteDialogOpen(true)}
               className="gap-2"
             >
@@ -248,13 +266,12 @@ const Settings = () => {
           <DialogHeader>
             <DialogTitle>Reset Your Password</DialogTitle>
             <DialogDescription>
-              {resetSent 
-                ? "Check your email for the password reset link" 
-                : `We'll send a password reset link to ${user?.email || "your email address"}`
-              }
+              {resetSent
+                ? "Check your email for the password reset link"
+                : `We'll send a password reset link to ${user?.email || "your email address"}`}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="py-4">
             {resetSent ? (
               <div className="text-center space-y-3">
@@ -262,7 +279,8 @@ const Settings = () => {
                   <CheckCircle2 className="w-6 h-6" />
                 </div>
                 <p className="text-sm">
-                  Password reset email sent! Check your inbox and follow the instructions.
+                  Password reset email sent! Check your inbox and follow the
+                  instructions.
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Didn't receive it? Check your spam folder or try again.
@@ -296,18 +314,16 @@ const Settings = () => {
 
           <DialogFooter>
             {resetSent ? (
-              <Button onClick={() => setResetDialogOpen(false)}>
-                Close
-              </Button>
+              <Button onClick={() => setResetDialogOpen(false)}>Close</Button>
             ) : (
               <>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setResetDialogOpen(false)}
                 >
                   Cancel
                 </Button>
-                <Button 
+                <Button
                   onClick={handleSendPasswordReset}
                   disabled={isSendingReset}
                   className="gradient-primary border-0"
@@ -331,12 +347,15 @@ const Settings = () => {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="bg-card border-border">
           <DialogHeader>
-            <DialogTitle className="text-destructive">Delete Account</DialogTitle>
+            <DialogTitle className="text-destructive">
+              Delete Account
+            </DialogTitle>
             <DialogDescription>
-              This action cannot be undone. This will permanently delete your account and remove all your data from our servers.
+              This action cannot be undone. This will permanently delete your
+              account and remove all your data from our servers.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="py-4 space-y-4">
             <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
               <h4 className="text-sm font-medium text-destructive mb-2 flex items-center gap-2">
@@ -369,8 +388,8 @@ const Settings = () => {
           </div>
 
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => {
                 setDeleteDialogOpen(false);
                 setConfirmDelete("");
@@ -379,8 +398,8 @@ const Settings = () => {
             >
               Cancel
             </Button>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="destructive"
               onClick={handleDeleteAccount}
               disabled={isDeleting || confirmDelete !== "DELETE"}
             >

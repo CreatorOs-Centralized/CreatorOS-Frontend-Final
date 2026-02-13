@@ -30,7 +30,7 @@ export function getKeycloakConfig(): KeycloakConfig {
   // to preserve enterprise features (SSO/MFA/social) and avoid mixing origins.
   // Token calls can still use the dev proxy to avoid CORS during local development.
   const keycloakPublicBaseUrl = normalizeBaseUrl(
-    (env.VITE_KEYCLOAK_BASE_URL as string) ?? "http://localhost:8081",
+    (env.VITE_KEYCLOAK_BASE_URL as string) ?? "http://localhost:8088",
   );
   const keycloakTokenBaseUrl = normalizeBaseUrl(
     (env.DEV ? DEV_KEYCLOAK_PROXY_BASE : keycloakPublicBaseUrl) as string,
@@ -50,7 +50,7 @@ export function getAuthServiceConfig(): AuthServiceConfig {
 
   const baseUrl = normalizeBaseUrl(
     (env.DEV ? DEV_AUTH_PROXY_BASE : env.VITE_AUTH_SERVICE_BASE_URL) ??
-      "http://localhost:8082",
+      "http://localhost:8081",
   );
 
   return { baseUrl };
@@ -63,7 +63,7 @@ export function getRedirectUri(): string {
     throw new Error("getRedirectUri() must run in a browser");
   }
 
-  return `${window.location.origin}/login`;
+  return `${window.location.origin}/auth/callback`;
 }
 
 export function getKeycloakTokenUrl(cfg: KeycloakConfig): string {
@@ -89,6 +89,11 @@ export function getKeycloakLoginUrl(
     url.searchParams.set("prompt", "login");
   }
 
+  // Ensure re-authentication rather than silently reusing an SSO session.
+  if (!Object.prototype.hasOwnProperty.call(params, "max_age")) {
+    url.searchParams.set("max_age", "0");
+  }
+
   for (const [key, value] of Object.entries(params)) {
     if (value) url.searchParams.set(key, value);
   }
@@ -111,6 +116,11 @@ export function getKeycloakRegisterUrl(
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", "openid");
 
+  // In shared/dev browsers, registration can otherwise appear to "auto-sign-in" if
+  // Keycloak already has an SSO session cookie.
+  url.searchParams.set("prompt", "login");
+  url.searchParams.set("max_age", "0");
+
   if (emailHint) url.searchParams.set("login_hint", emailHint);
 
   return url.toString();
@@ -131,6 +141,19 @@ export function getKeycloakResetPasswordUrl(
   url.searchParams.set("scope", "openid");
 
   if (emailHint) url.searchParams.set("login_hint", emailHint);
+
+  return url.toString();
+}
+
+export function getKeycloakLogoutUrl(
+  cfg: KeycloakConfig,
+  postLogoutRedirectUri: string,
+): string {
+  const base = `${cfg.baseUrl}/realms/${encodeURIComponent(cfg.realm)}/protocol/openid-connect/logout`;
+  const url = new URL(base, window.location.origin);
+
+  url.searchParams.set("client_id", cfg.clientId);
+  url.searchParams.set("post_logout_redirect_uri", postLogoutRedirectUri);
 
   return url.toString();
 }

@@ -1,9 +1,15 @@
 export interface User {
   id: string;
-  email: string;
+  email: string | null;
+  username?: string | null;
+  roles?: string[];
   is_email_verified: boolean;
   is_active: boolean;
   created_at: string;
+
+  // Frontend-only state
+  isProfileComplete?: boolean;
+  profileData?: CreatorProfile;
 }
 
 export interface CreatorProfile {
@@ -11,14 +17,19 @@ export interface CreatorProfile {
   user_id: string;
   username: string;
   display_name: string;
+  fullName?: string;
   bio: string;
   niche: string;
   profile_photo_url: string;
-  cover_photo_url: string;
+  cover_photo_url?: string;
   location: string;
   language: string;
-  is_public: boolean;
-  is_verified: boolean;
+  dateOfBirth?: string;
+  instagramToken?: string;
+  youtubeToken?: string;
+
+  is_public?: boolean;
+  is_verified?: boolean;
 }
 
 export interface SocialLink {
@@ -36,11 +47,16 @@ export interface ContentItem {
   title: string;
   summary: string;
   content_type: string;
-  status: 'draft' | 'scheduled' | 'published' | 'archived';
+  status: "draft" | "scheduled" | "published" | "archived";
   scheduled_at: string | null;
   published_at: string | null;
   created_at: string;
   thumbnail_url?: string;
+
+  // Frontend-only fields used for local previews
+  video_url?: string;
+  video_name?: string;
+  video_size?: number;
 }
 
 export interface ConnectedAccount {
@@ -57,7 +73,7 @@ export interface PublishJob {
   content_item_id: string;
   platform: string;
   post_type: string;
-  status: 'pending' | 'publishing' | 'published' | 'failed';
+  status: "pending" | "publishing" | "published" | "failed";
   scheduled_at: string | null;
 }
 

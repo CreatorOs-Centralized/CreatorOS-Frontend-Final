@@ -6,9 +6,9 @@ import { componentTagger } from "lovable-tagger";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_");
-  
-  const authTarget = env.VITE_AUTH_SERVICE_BASE_URL || "http://localhost:8082";
-  const keycloakTarget = env.VITE_KEYCLOAK_BASE_URL || "http://localhost:8081";
+
+  const authTarget = env.VITE_AUTH_SERVICE_BASE_URL || "http://localhost:8081";
+  const keycloakTarget = env.VITE_KEYCLOAK_BASE_URL || "http://localhost:8088";
 
   return {
     server: {
@@ -29,7 +29,9 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
-    plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+    plugins: [react(), mode === "development" && componentTagger()].filter(
+      Boolean,
+    ),
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

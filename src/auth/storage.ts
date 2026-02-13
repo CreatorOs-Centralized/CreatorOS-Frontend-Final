@@ -28,8 +28,8 @@ export function clearTokens(): void {
   localStorage.removeItem(TOKENS_KEY);
 }
 
-export function loadUser<TUser>(): TUser | null {
-  const raw = localStorage.getItem(USER_KEY);
+export function loadUser<TUser>(key: string = USER_KEY): TUser | null {
+  const raw = localStorage.getItem(key);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as TUser;
@@ -38,10 +38,10 @@ export function loadUser<TUser>(): TUser | null {
   }
 }
 
-export function saveUser<TUser>(user: TUser): void {
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
+export function saveUser<TUser>(user: TUser, key: string = USER_KEY): void {
+  localStorage.setItem(key, JSON.stringify(user));
 }
 
-export function clearUser(): void {
-  localStorage.removeItem(USER_KEY);
+export function clearUser(key: string = USER_KEY): void {
+  localStorage.removeItem(key);
 }
