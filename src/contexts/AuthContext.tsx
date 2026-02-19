@@ -10,23 +10,12 @@ interface AuthContextType {
   logout: () => void;
   updateProfile: (profile: Partial<CreatorProfile>) => void;
   profileCompletion: number;
-<<<<<<< HEAD
+  isAuthenticated: boolean;
+  token: string | null;
   sendPasswordReset: (email: string) => Promise<void>;
   deleteAccount: () => Promise<void>;
-  getAccessToken: () => Promise<string>;
 }
 
-interface KeycloakUser {
-  id: string;
-  email?: string | null;
-  username?: string | null;
-  roles?: string[];
-  isEmailVerified?: boolean;
-  isProfileComplete: boolean;
-  profileData?: CreatorProfile;
-=======
->>>>>>> 574a14ff0b92232c053b706b93856ba50ad7e3c3
-}
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
@@ -46,20 +35,26 @@ const calcCompletion = (p: CreatorProfile | null): number => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<CreatorProfile | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const stored = localStorage.getItem("creatoros_user");
     const storedProfile = localStorage.getItem("creatoros_profile");
+    const storedToken = localStorage.getItem("creatoros_token");
     if (stored) setUser(JSON.parse(stored));
     if (storedProfile) setProfile(JSON.parse(storedProfile));
+    if (storedToken) setToken(storedToken);
     setIsLoading(false);
   }, []);
 
   const login = async (email: string, _password: string) => {
     const u: User = { id: "1", email, is_email_verified: true, is_active: true, created_at: new Date().toISOString() };
+    const t = "mock_token"; // In real app, this comes from API
     setUser(u);
+    setToken(t);
     localStorage.setItem("creatoros_user", JSON.stringify(u));
+    localStorage.setItem("creatoros_token", t);
     const sp = localStorage.getItem("creatoros_profile");
     if (sp) setProfile(JSON.parse(sp));
   };
@@ -73,8 +68,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     setUser(null);
     setProfile(null);
+    setToken(null);
     localStorage.removeItem("creatoros_user");
     localStorage.removeItem("creatoros_profile");
+    localStorage.removeItem("creatoros_token");
   };
 
   const updateProfile = (updates: Partial<CreatorProfile>) => {
@@ -84,26 +81,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-<<<<<<< HEAD
     <AuthContext.Provider
       value={{
         user,
         profile,
         isLoading,
         isAuthenticated: Boolean(user),
+        token,
         login,
         register,
         logout,
         updateProfile,
         profileCompletion: calcCompletion(profile),
-        sendPasswordReset,
-        deleteAccount,
-        getAccessToken: getValidAccessToken,
+        sendPasswordReset: async () => { }, // Mock implementation
+        deleteAccount: async () => { }, // Mock implementation
       }}
     >
-=======
-    <AuthContext.Provider value={{ user, profile, isLoading, login, register, logout, updateProfile, profileCompletion: calcCompletion(profile) }}>
->>>>>>> 574a14ff0b92232c053b706b93856ba50ad7e3c3
       {children}
     </AuthContext.Provider>
   );
