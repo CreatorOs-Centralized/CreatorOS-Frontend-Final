@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff, Zap } from "lucide-react";
+import { Eye, EyeOff, Zap, AlertCircle } from "lucide-react";
 
 const Register = () => {
   const [email, setEmail] = useState("");
@@ -12,16 +12,36 @@ const Register = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const { register } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password !== confirmPassword) return;
+    setError("");
+
+    if (password !== confirmPassword) {
+      setError("Passwords don't match");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
     setLoading(true);
-    await register(email, password);
+    
+    const result = await register(email, password);
+    
+    if (result.success) {
+      // Navigate to email verification page
+      navigate("/verify-email", { state: { email } });
+    } else {
+      setError(result.error || "Registration failed");
+    }
+    
     setLoading(false);
-    navigate("/verify-email");
   };
 
   return (
@@ -35,28 +55,71 @@ const Register = () => {
           <p className="text-muted-foreground">Start managing your content like a pro</p>
         </div>
 
+        {error && (
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 text-destructive" />
+            <p className="text-sm text-destructive">{error}</p>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4 glass rounded-xl p-6">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
+            <Input 
+              id="email" 
+              type="email" 
+              placeholder="you@example.com" 
+              value={email} 
+              onChange={e => setEmail(e.target.value)} 
+              required 
+              disabled={loading}
+            />
           </div>
+          
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
             <div className="relative">
-              <Input id="password" type={showPass ? "text" : "password"} placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
-              <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <Input 
+                id="password" 
+                type={showPass ? "text" : "password"} 
+                placeholder="••••••••" 
+                value={password} 
+                onChange={e => setPassword(e.target.value)} 
+                required 
+                disabled={loading}
+              />
+              <button 
+                type="button" 
+                onClick={() => setShowPass(!showPass)} 
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                disabled={loading}
+              >
                 {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
           </div>
+          
           <div className="space-y-2">
             <Label htmlFor="confirm">Confirm Password</Label>
-            <Input id="confirm" type="password" placeholder="••••••••" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
+            <Input 
+              id="confirm" 
+              type="password" 
+              placeholder="••••••••" 
+              value={confirmPassword} 
+              onChange={e => setConfirmPassword(e.target.value)} 
+              required 
+              disabled={loading}
+            />
             {password && confirmPassword && password !== confirmPassword && (
               <p className="text-xs text-destructive">Passwords don't match</p>
             )}
           </div>
-          <Button type="submit" className="w-full gradient-primary border-0" disabled={loading || password !== confirmPassword}>
+          
+          <Button 
+            type="submit" 
+            className="w-full gradient-primary border-0" 
+            disabled={loading || password !== confirmPassword || password.length < 6}
+          >
             {loading ? "Creating account..." : "Create Account"}
           </Button>
         </form>

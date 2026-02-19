@@ -1,103 +1,140 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
-import type { User, CreatorProfile } from "@/types";
+import React, { createContext, useState, useContext, useEffect } from 'react';
+import { authApi, type UserDto, type LoginCredentials, type RegisterData } from '@/lib/api';
 
 interface AuthContextType {
-  user: User | null;
-  profile: CreatorProfile | null;
-  isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
-  logout: () => void;
-  updateProfile: (profile: Partial<CreatorProfile>) => void;
-  profileCompletion: number;
+  user: UserDto | null;
   isAuthenticated: boolean;
-  token: string | null;
-  sendPasswordReset: (email: string) => Promise<void>;
-  deleteAccount: () => Promise<void>;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
+  verifyEmail: (token: string) => Promise<{ success: boolean; error?: string }>;
 }
 
-
-const AuthContext = createContext<AuthContextType | null>(null);
-
-export const useAuth = () => {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
-};
-
-const calcCompletion = (p: CreatorProfile | null): number => {
-  if (!p) return 0;
-  const fields = ['username', 'display_name', 'bio', 'niche', 'profile_photo_url', 'location', 'language'] as const;
-  const filled = fields.filter(f => p[f] && p[f].trim() !== '').length;
-  return Math.round((filled / fields.length) * 100);
-};
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<CreatorProfile | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<UserDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem("creatoros_user");
-    const storedProfile = localStorage.getItem("creatoros_profile");
-    const storedToken = localStorage.getItem("creatoros_token");
-    if (stored) setUser(JSON.parse(stored));
-    if (storedProfile) setProfile(JSON.parse(storedProfile));
-    if (storedToken) setToken(storedToken);
-    setIsLoading(false);
+    // Check if user is already logged in
+    const initAuth = async () => {
+      const token = localStorage.getItem('accessToken');
+      
+      if (token) {
+        try {
+          const userData = await authApi.getCurrentUser();
+          setUser(userData);
+        } catch (error) {
+          console.error('Failed to fetch user:', error);
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+        }
+      }
+      
+      setIsLoading(false);
+    };
+
+    initAuth();
   }, []);
 
-  const login = async (email: string, _password: string) => {
-    const u: User = { id: "1", email, is_email_verified: true, is_active: true, created_at: new Date().toISOString() };
-    const t = "mock_token"; // In real app, this comes from API
-    setUser(u);
-    setToken(t);
-    localStorage.setItem("creatoros_user", JSON.stringify(u));
-    localStorage.setItem("creatoros_token", t);
-    const sp = localStorage.getItem("creatoros_profile");
-    if (sp) setProfile(JSON.parse(sp));
+  const login = async (email: string, password: string) => {
+    try {
+      const credentials: LoginCredentials = { email, password };
+      const response = await authApi.login(credentials);
+      
+      // Store tokens
+      localStorage.setItem('accessToken', response.accessToken);
+      localStorage.setItem('refreshToken', response.refreshToken);
+      
+      // Fetch user data
+      const userData = await authApi.getCurrentUser();
+      setUser(userData);
+      
+      return { success: true };
+    } catch (error: any) {
+      console.error('Login failed:', error);
+      return { 
+        success: false, 
+        error: error.response?.data?.message || 'Login failed. Please check your credentials.' 
+      };
+    }
   };
 
-  const register = async (email: string, _password: string) => {
-    const u: User = { id: "1", email, is_email_verified: false, is_active: true, created_at: new Date().toISOString() };
-    setUser(u);
-    localStorage.setItem("creatoros_user", JSON.stringify(u));
+  const register = async (email: string, password: string) => {
+    try {
+      const registerData: RegisterData = { email, password };
+      const response = await authApi.register(registerData);
+      
+      // Option 1: Auto-login after registration
+      // You can automatically log them in
+      // return await login(email, password);
+      
+      // Option 2: Return success and let them navigate to verify email
+      return { success: true };
+    } catch (error: any) {
+      console.error('Registration failed:', error);
+      return { 
+        success: false, 
+        error: error.response?.data?.message || 'Registration failed. Please try again.' 
+      };
+    }
   };
 
-  const logout = () => {
-    setUser(null);
-    setProfile(null);
-    setToken(null);
-    localStorage.removeItem("creatoros_user");
-    localStorage.removeItem("creatoros_profile");
-    localStorage.removeItem("creatoros_token");
+  const logout = async () => {
+    try {
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (refreshToken) {
+        await authApi.logout(refreshToken);
+      }
+    } catch (error) {
+      console.error('Logout failed:', error);
+    } finally {
+      // Clear tokens and user state regardless of API success
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      setUser(null);
+    }
   };
 
-  const updateProfile = (updates: Partial<CreatorProfile>) => {
-    const newProfile = { ...profile, ...updates, user_id: user?.id || "1", id: profile?.id || "1" } as CreatorProfile;
-    setProfile(newProfile);
-    localStorage.setItem("creatoros_profile", JSON.stringify(newProfile));
+  const verifyEmail = async (token: string) => {
+    try {
+      await authApi.verifyEmail(token);
+      
+      // Refresh user data to get updated email verification status
+      if (localStorage.getItem('accessToken')) {
+        const userData = await authApi.getCurrentUser();
+        setUser(userData);
+      }
+      
+      return { success: true };
+    } catch (error: any) {
+      console.error('Email verification failed:', error);
+      return { 
+        success: false, 
+        error: error.response?.data?.message || 'Verification failed. Please try again.' 
+      };
+    }
   };
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        profile,
-        isLoading,
-        isAuthenticated: Boolean(user),
-        token,
-        login,
-        register,
-        logout,
-        updateProfile,
-        profileCompletion: calcCompletion(profile),
-        sendPasswordReset: async () => { }, // Mock implementation
-        deleteAccount: async () => { }, // Mock implementation
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+  const value = {
+    user,
+    isAuthenticated: !!user,
+    isLoading,
+    login,
+    register,
+    logout,
+    verifyEmail,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 };
