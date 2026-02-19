@@ -10,21 +10,18 @@ import { Progress } from "@/components/ui/progress";
 import { 
   Zap, 
   User, 
-  Palette, 
   Globe, 
   ArrowRight, 
   Check, 
   Calendar, 
   MapPin, 
-  Instagram, 
-  Youtube, 
   AtSign, 
   FileText, 
   Upload,
   AlertCircle
 } from "lucide-react";
 
-const steps = ["Basic Info", "About You", "Preferences", "Social"];
+const steps = ["Basic Info", "About You", "Preferences"];
 
 const CompleteProfile = () => {
   const { updateProfile, user, isAuthenticated } = useAuth();
@@ -40,8 +37,6 @@ const CompleteProfile = () => {
     location: "",
     language: "",
     dateOfBirth: "",
-    instagramToken: "",
-    youtubeToken: "",
   });
   const [avatar, setAvatar] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string>("");
@@ -125,12 +120,11 @@ const CompleteProfile = () => {
       (avatar !== null || form.profile_photo_url?.trim() !== "") &&
       form.dateOfBirth?.trim() !== "" &&
       form.location?.trim() !== "" &&
-      form.language?.trim() !== "" &&
-      form.instagramToken?.trim() !== "" &&
-      form.youtubeToken?.trim() !== ""
+      form.language?.trim() !== ""
     );
   };
 
+  // Fixed completion calculation - ensure it never exceeds 100
   const completion = (() => {
     const fields = [
       form.username,
@@ -138,16 +132,23 @@ const CompleteProfile = () => {
       form.fullName,
       form.bio,
       form.niche,
-      form.profile_photo_url,
       form.location,
       form.language,
       form.dateOfBirth,
-      form.instagramToken,
-      form.youtubeToken,
     ];
+    
+    // Count filled text fields
+    const filledFields = fields.filter(f => f?.trim() !== '').length;
+    
+    // Check if avatar is present (either uploaded or has URL)
     const hasAvatar = avatar !== null || form.profile_photo_url?.trim() !== "";
-    const filled = fields.filter(f => f?.trim() !== '').length + (hasAvatar ? 1 : 0);
-    return Math.round((filled / 11) * 100);
+    
+    // Total fields: 8 text fields + 1 avatar field = 9 total
+    const totalFields = 9;
+    const filledCount = filledFields + (hasAvatar ? 1 : 0);
+    
+    // Calculate percentage and ensure it never exceeds 100
+    return Math.min(Math.round((filledCount / totalFields) * 100), 100);
   })();
 
   const nextStep = () => {
@@ -169,14 +170,9 @@ const CompleteProfile = () => {
         setError("Please fill in all required fields in this section");
         return;
       }
-    } else if (step === 3) {
-      if (!form.instagramToken || !form.youtubeToken) {
-        setError("Please fill in all required fields in this section");
-        return;
-      }
     }
 
-    if (step < 3) {
+    if (step < 2) {
       setStep(step + 1);
     } else if (completion >= 100) {
       handleSubmit();
@@ -219,11 +215,6 @@ const CompleteProfile = () => {
     }
   };
 
-  const handleSkip = () => {
-    // Allow users to complete profile later
-    navigate("/dashboard");
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-lg space-y-6">
@@ -248,7 +239,7 @@ const CompleteProfile = () => {
             <button 
               key={s} 
               onClick={() => setStep(i)} 
-              disabled={i > step && completion < (i * 25)}
+              disabled={i > step && completion < ((i + 1) * 33)}
               className={`flex-1 text-xs py-2 px-3 rounded-lg flex items-center gap-1.5 justify-center transition-colors ${
                 i === step 
                   ? 'bg-primary text-primary-foreground' 
@@ -260,8 +251,7 @@ const CompleteProfile = () => {
               {i < step ? <Check className="w-3 h-3" /> : 
                i === 0 ? <User className="w-3 h-3" /> : 
                i === 1 ? <FileText className="w-3 h-3" /> : 
-               i === 2 ? <Globe className="w-3 h-3" /> : 
-               <Instagram className="w-3 h-3" />}
+               <Globe className="w-3 h-3" />}
               {s}
             </button>
           ))}
@@ -437,45 +427,6 @@ const CompleteProfile = () => {
                   </Select>
                 </div>
               </div>
-            </>
-          )}
-
-          {step === 3 && (
-            <>
-              <div className="space-y-2">
-                <Label>Instagram Access Token *</Label>
-                <div className="relative">
-                  <Instagram className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input 
-                    className="pl-9"
-                    type="password"
-                    placeholder="Enter your Instagram access token" 
-                    value={form.instagramToken || ''} 
-                    onChange={e => update("instagramToken", e.target.value)} 
-                    required
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Required for Instagram integration
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label>YouTube API Token *</Label>
-                <div className="relative">
-                  <Youtube className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input 
-                    className="pl-9"
-                    type="password"
-                    placeholder="Enter your YouTube API token" 
-                    value={form.youtubeToken || ''} 
-                    onChange={e => update("youtubeToken", e.target.value)} 
-                    required
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Required for YouTube integration
-                </p>
-              </div>
               <div className="bg-primary/5 border border-primary/10 rounded-lg p-4">
                 <h3 className="font-semibold mb-2">Important Information</h3>
                 <ul className="space-y-2 text-sm text-muted-foreground">
@@ -485,46 +436,32 @@ const CompleteProfile = () => {
                   </li>
                   <li className="flex items-start">
                     <span className="text-primary mr-2">•</span>
-                    <span>Your social tokens are securely encrypted and never shared</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="text-primary mr-2">•</span>
-                    <span>You can update this information anytime from your profile settings</span>
+                    <span>You can update your information anytime from your profile settings</span>
                   </li>
                 </ul>
               </div>
             </>
           )}
 
-          <div className="flex gap-3">
-            <Button 
-              onClick={nextStep} 
-              className="flex-1 gradient-primary border-0" 
-              disabled={isLoading || (step === 3 && completion < 100)}
-            >
-              {isLoading ? (
-                <span className="flex items-center justify-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-4 w-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Saving...
-                </span>
-              ) : step < 3 ? (
-                <>Next <ArrowRight className="w-4 h-4 ml-1" /></>
-              ) : (
-                "Complete Profile"
-              )}
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              onClick={handleSkip}
-              className="flex-none"
-            >
-              Skip for now
-            </Button>
-          </div>
+          <Button 
+            onClick={nextStep} 
+            className="w-full gradient-primary border-0" 
+            disabled={isLoading || (step === 2 && completion < 100)}
+          >
+            {isLoading ? (
+              <span className="flex items-center justify-center">
+                <svg className="animate-spin -ml-1 mr-3 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Saving...
+              </span>
+            ) : step < 2 ? (
+              <>Next <ArrowRight className="w-4 h-4 ml-1" /></>
+            ) : (
+              "Complete Profile"
+            )}
+          </Button>
         </div>
       </div>
     </div>
