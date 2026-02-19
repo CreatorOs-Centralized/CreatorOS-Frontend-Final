@@ -45,6 +45,7 @@ interface AuthContextType {
   profileCompletion: number;
   sendPasswordReset: (email: string) => Promise<void>;
   deleteAccount: () => Promise<void>;
+  getAccessToken: () => Promise<string>;
 }
 
 interface KeycloakUser {
@@ -536,6 +537,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         profileCompletion: calcCompletion(profile),
         sendPasswordReset,
         deleteAccount,
+        getAccessToken: getValidAccessToken,
       }}
     >
       {children}

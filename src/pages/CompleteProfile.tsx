@@ -7,27 +7,28 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { 
-  Zap, 
-  User, 
-  Palette, 
-  Globe, 
-  ArrowRight, 
-  Check, 
-  Calendar, 
-  MapPin, 
-  Instagram, 
-  Youtube, 
-  AtSign, 
-  FileText, 
+import {
+  Zap,
+  User,
+  Palette,
+  Globe,
+  ArrowRight,
+  Check,
+  Calendar,
+  MapPin,
+  Instagram,
+  Youtube,
+  AtSign,
+  FileText,
   Upload,
   AlertCircle
 } from "lucide-react";
+import { uploadImage } from "@/services/asset";
 
 const steps = ["Basic Info", "About You", "Preferences", "Social"];
 
 const CompleteProfile = () => {
-  const { updateProfile, user, isAuthenticated } = useAuth();
+  const { updateProfile, user, isAuthenticated, getAccessToken } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
@@ -83,7 +84,7 @@ const CompleteProfile = () => {
   ];
 
   const niches = [
-    "Tech", "Gaming", "Lifestyle", "Education", "Entertainment", 
+    "Tech", "Gaming", "Lifestyle", "Education", "Entertainment",
     "Fitness", "Music", "Art", "Food", "Travel"
   ];
 
@@ -100,7 +101,7 @@ const CompleteProfile = () => {
         setError("File size must be less than 5MB");
         return;
       }
-      
+
       // Validate file type
       if (!file.type.startsWith('image/')) {
         setError("Please upload an image file");
@@ -152,7 +153,7 @@ const CompleteProfile = () => {
 
   const nextStep = () => {
     setError("");
-    
+
     // Validate current step before proceeding
     if (step === 0) {
       if (!form.fullName || !form.display_name || !form.username || (!avatar && !form.profile_photo_url)) {
@@ -194,14 +195,25 @@ const CompleteProfile = () => {
 
     try {
       let avatarUrl = form.profile_photo_url;
-      
+
       // In a real implementation, you would upload the file to your storage service
       // and get back a URL. For now, we'll use the preview URL.
       if (avatar) {
-        // This is where you'd upload to S3, Cloudinary, etc.
-        // const uploadResult = await uploadAvatar(avatar);
-        // avatarUrl = uploadResult.url;
-        avatarUrl = avatarPreview;
+        try {
+          if (!user?.id) throw new Error("User ID not found");
+          const token = await getAccessToken();
+          const folderId = "profile-photos";
+
+          // Upload to Asset Service
+          const uploadedUrl = await uploadImage(avatar, user.id, folderId, token);
+          avatarUrl = uploadedUrl;
+        } catch (uploadError) {
+          console.error("Image upload failed:", uploadError);
+          // Fallback or show error? For now, we'll try to proceed but warn
+          setError("Failed to upload profile image. Please try again.");
+          setIsLoading(false);
+          return;
+        }
       }
 
       const profileData = {
@@ -245,23 +257,22 @@ const CompleteProfile = () => {
 
         <div className="flex gap-2 mb-4">
           {steps.map((s, i) => (
-            <button 
-              key={s} 
-              onClick={() => setStep(i)} 
+            <button
+              key={s}
+              onClick={() => setStep(i)}
               disabled={i > step && completion < (i * 25)}
-              className={`flex-1 text-xs py-2 px-3 rounded-lg flex items-center gap-1.5 justify-center transition-colors ${
-                i === step 
-                  ? 'bg-primary text-primary-foreground' 
-                  : i < step 
-                    ? 'bg-primary/20 text-primary' 
-                    : 'bg-secondary text-muted-foreground cursor-not-allowed opacity-50'
-              }`}
+              className={`flex-1 text-xs py-2 px-3 rounded-lg flex items-center gap-1.5 justify-center transition-colors ${i === step
+                ? 'bg-primary text-primary-foreground'
+                : i < step
+                  ? 'bg-primary/20 text-primary'
+                  : 'bg-secondary text-muted-foreground cursor-not-allowed opacity-50'
+                }`}
             >
-              {i < step ? <Check className="w-3 h-3" /> : 
-               i === 0 ? <User className="w-3 h-3" /> : 
-               i === 1 ? <FileText className="w-3 h-3" /> : 
-               i === 2 ? <Globe className="w-3 h-3" /> : 
-               <Instagram className="w-3 h-3" />}
+              {i < step ? <Check className="w-3 h-3" /> :
+                i === 0 ? <User className="w-3 h-3" /> :
+                  i === 1 ? <FileText className="w-3 h-3" /> :
+                    i === 2 ? <Globe className="w-3 h-3" /> :
+                      <Instagram className="w-3 h-3" />}
               {s}
             </button>
           ))}
@@ -320,21 +331,21 @@ const CompleteProfile = () => {
                 <Label>Full Name *</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     className="pl-9"
-                    placeholder="John Doe" 
-                    value={form.fullName || ''} 
-                    onChange={e => update("fullName", e.target.value)} 
+                    placeholder="John Doe"
+                    value={form.fullName || ''}
+                    onChange={e => update("fullName", e.target.value)}
                     required
                   />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label>Display Name *</Label>
-                <Input 
-                  placeholder="Your Name" 
-                  value={form.display_name} 
-                  onChange={e => update("display_name", e.target.value)} 
+                <Input
+                  placeholder="Your Name"
+                  value={form.display_name}
+                  onChange={e => update("display_name", e.target.value)}
                   required
                 />
               </div>
@@ -342,11 +353,11 @@ const CompleteProfile = () => {
                 <Label>Username *</Label>
                 <div className="relative">
                   <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     className="pl-9"
-                    placeholder="@yourhandle" 
-                    value={form.username} 
-                    onChange={e => update("username", e.target.value)} 
+                    placeholder="@yourhandle"
+                    value={form.username}
+                    onChange={e => update("username", e.target.value)}
                     required
                   />
                 </div>
@@ -356,18 +367,18 @@ const CompleteProfile = () => {
               </div>
             </>
           )}
-          
+
           {step === 1 && (
             <>
               <div className="space-y-2">
                 <Label>Bio *</Label>
                 <div className="relative">
                   <FileText className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                  <Textarea 
+                  <Textarea
                     className="pl-9"
-                    placeholder="Tell us about yourself and your content..." 
-                    value={form.bio} 
-                    onChange={e => update("bio", e.target.value)} 
+                    placeholder="Tell us about yourself and your content..."
+                    value={form.bio}
+                    onChange={e => update("bio", e.target.value)}
                     rows={4}
                     maxLength={500}
                     required
@@ -394,29 +405,29 @@ const CompleteProfile = () => {
                 <Label>Date of Birth *</Label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     className="pl-9"
-                    type="date" 
-                    value={form.dateOfBirth || ''} 
-                    onChange={e => update("dateOfBirth", e.target.value)} 
+                    type="date"
+                    value={form.dateOfBirth || ''}
+                    onChange={e => update("dateOfBirth", e.target.value)}
                     required
                   />
                 </div>
               </div>
             </>
           )}
-          
+
           {step === 2 && (
             <>
               <div className="space-y-2">
                 <Label>Location *</Label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     className="pl-9"
-                    placeholder="City, Country" 
-                    value={form.location} 
-                    onChange={e => update("location", e.target.value)} 
+                    placeholder="City, Country"
+                    value={form.location}
+                    onChange={e => update("location", e.target.value)}
                     required
                   />
                 </div>
@@ -446,12 +457,12 @@ const CompleteProfile = () => {
                 <Label>Instagram Access Token *</Label>
                 <div className="relative">
                   <Instagram className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     className="pl-9"
                     type="password"
-                    placeholder="Enter your Instagram access token" 
-                    value={form.instagramToken || ''} 
-                    onChange={e => update("instagramToken", e.target.value)} 
+                    placeholder="Enter your Instagram access token"
+                    value={form.instagramToken || ''}
+                    onChange={e => update("instagramToken", e.target.value)}
                     required
                   />
                 </div>
@@ -463,12 +474,12 @@ const CompleteProfile = () => {
                 <Label>YouTube API Token *</Label>
                 <div className="relative">
                   <Youtube className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     className="pl-9"
                     type="password"
-                    placeholder="Enter your YouTube API token" 
-                    value={form.youtubeToken || ''} 
-                    onChange={e => update("youtubeToken", e.target.value)} 
+                    placeholder="Enter your YouTube API token"
+                    value={form.youtubeToken || ''}
+                    onChange={e => update("youtubeToken", e.target.value)}
                     required
                   />
                 </div>
@@ -497,9 +508,9 @@ const CompleteProfile = () => {
           )}
 
           <div className="flex gap-3">
-            <Button 
-              onClick={nextStep} 
-              className="flex-1 gradient-primary border-0" 
+            <Button
+              onClick={nextStep}
+              className="flex-1 gradient-primary border-0"
               disabled={isLoading || (step === 3 && completion < 100)}
             >
               {isLoading ? (
@@ -516,9 +527,9 @@ const CompleteProfile = () => {
                 "Complete Profile"
               )}
             </Button>
-            
-            <Button 
-              variant="outline" 
+
+            <Button
+              variant="outline"
               onClick={handleSkip}
               className="flex-none"
             >
