@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,13 @@ const Login = () => {
   const [error, setError] = useState("");
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const state = location.state as { email?: unknown } | null;
+    const stateEmail = state?.email;
+    if (typeof stateEmail === "string" && stateEmail.trim() && !email) setEmail(stateEmail);
+  }, [location.state, email]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,7 +30,7 @@ const Login = () => {
     const result = await login(email, password);
     
     if (result.success) {
-      navigate("/dashboard");
+      navigate(result.nextRoute || "/dashboard", { replace: true });
     } else {
       setError(result.error || "Login failed");
     }

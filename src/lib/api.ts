@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8081/auth';
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_AUTH_SERVICE_BASE_URL ||
+  '/__auth/auth';
 
 export interface LoginCredentials {
   email: string;
@@ -32,6 +35,10 @@ export interface UserDto {
   fullName?: string;
   roles: string[];
   emailVerified: boolean;
+
+  // Frontend-only augmentation (profile completion is computed client-side from profile-service data)
+  isProfileComplete?: boolean;
+  profileData?: Record<string, unknown>;
 }
 
 const api = axios.create({

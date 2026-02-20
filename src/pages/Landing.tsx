@@ -1,10 +1,12 @@
-import { Link } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, useNavigationType } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Zap, BarChart3, Video, Send, Users, ArrowRight, Star, CheckCircle } from "lucide-react";
 import heroImg from "@/assets/hero-landing.jpg";
 import featureAnalytics from "@/assets/feature-analytics.jpg";
 import featurePublish from "@/assets/feature-publish.jpg";
 import featureConnect from "@/assets/feature-connect.jpg";
+import { useAuth } from "@/contexts/AuthContext";
 
 const features = [
   { icon: Video, title: "Upload & Manage", desc: "Upload videos, organize content, and manage your entire library in one place.", image: featurePublish },
@@ -26,6 +28,27 @@ const testimonials = [
 ];
 
 const Landing = () => {
+  const navigationType = useNavigationType();
+  const { isAuthenticated, isLoading, logout } = useAuth();
+
+  useEffect(() => {
+    if (isLoading) return;
+    let hasSeenLanding = false;
+    try {
+      hasSeenLanding = sessionStorage.getItem("creatoros.landing.seen") === "1";
+      sessionStorage.setItem("creatoros.landing.seen", "1");
+    } catch {
+      // ignore (storage might be unavailable)
+    }
+
+    // If the user navigated back/forward to landing (i.e., POP) and they've been here before
+    // in this tab session, clear session. This prevents "silent" auth when they click Sign In/Get Started.
+    if (navigationType !== "POP") return;
+    if (!hasSeenLanding) return;
+    if (!isAuthenticated) return;
+    void logout();
+  }, [isAuthenticated, isLoading, logout, navigationType]);
+
   return (
     <div className="min-h-screen bg-background overflow-hidden">
       {/* Nav */}

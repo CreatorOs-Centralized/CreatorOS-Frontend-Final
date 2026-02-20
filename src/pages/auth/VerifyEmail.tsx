@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Mail, Zap, CheckCircle, AlertCircle } from "lucide-react";
 
 const VerifyEmail = () => {
-  const { user, verifyEmail } = useAuth();
+  const { user, verifyEmail, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [verifying, setVerifying] = useState(false);
@@ -32,10 +32,15 @@ const VerifyEmail = () => {
     const result = await verifyEmail(token);
     
     if (result.success) {
-      // Wait a moment to show success state
+      // If user is logged in already, send them to the correct next step.
+      // If not logged in (common case), send them to login first.
       setTimeout(() => {
-        navigate("/complete-profile");
-      }, 2000);
+        if (isAuthenticated) {
+          navigate(user?.isProfileComplete ? "/dashboard" : "/complete-profile", { replace: true });
+        } else {
+          navigate("/login", { replace: true, state: { email } });
+        }
+      }, 1200);
     } else {
       setError(result.error || "Verification failed");
     }

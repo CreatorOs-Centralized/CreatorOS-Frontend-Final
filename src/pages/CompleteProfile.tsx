@@ -24,7 +24,7 @@ import {
 const steps = ["Basic Info", "About You", "Preferences"];
 
 const CompleteProfile = () => {
-  const { updateProfile, user, isAuthenticated } = useAuth();
+  const { updateProfile, user, profile, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
@@ -49,7 +49,27 @@ const CompleteProfile = () => {
     }
   }, [isAuthenticated, user?.isProfileComplete, navigate]);
 
-  // Pre-fill form with existing user data if available
+  // Pre-fill from profile-service (source of truth for onboarding)
+  useEffect(() => {
+    if (!profile) return;
+
+    setForm((prev) => ({
+      ...prev,
+      username: profile.username || prev.username,
+      display_name: profile.display_name || prev.display_name,
+      bio: profile.bio || prev.bio,
+      niche: profile.niche || prev.niche,
+      profile_photo_url: profile.profile_photo_url || prev.profile_photo_url,
+      location: profile.location || prev.location,
+      language: profile.language || prev.language,
+    }));
+
+    if (profile.profile_photo_url) {
+      setAvatarPreview(profile.profile_photo_url);
+    }
+  }, [profile]);
+
+  // Pre-fill extra fields that are UI-only (local persistence)
   useEffect(() => {
     if (user?.profileData) {
       setForm(prev => ({
@@ -206,7 +226,7 @@ const CompleteProfile = () => {
       };
 
       await updateProfile(profileData);
-      navigate("/dashboard");
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       console.error("Failed to update profile:", err);
       setError(err instanceof Error ? err.message : "Failed to update profile. Please try again.");

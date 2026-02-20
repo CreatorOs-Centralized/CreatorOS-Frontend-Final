@@ -22,17 +22,17 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+const ProtectedRoute = ({
+  children,
+  requireProfileComplete = false,
+}: {
+  children: React.ReactNode;
+  requireProfileComplete?: boolean;
+}) => {
   const { user, isLoading } = useAuth();
   if (isLoading) return null;
   if (!user) return <Navigate to="/login" replace />;
-  return <>{children}</>;
-};
-
-const PublicRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isLoading } = useAuth();
-  if (isLoading) return null;
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (requireProfileComplete && !user.isProfileComplete) return <Navigate to="/complete-profile" replace />;
   return <>{children}</>;
 };
 
@@ -45,12 +45,12 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Landing />} />
-            <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-            <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/complete-profile" element={<ProtectedRoute><CompleteProfile /></ProtectedRoute>} />
-            <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+            <Route path="/dashboard" element={<ProtectedRoute requireProfileComplete><DashboardLayout /></ProtectedRoute>}>
               <Route index element={<Dashboard />} />
               <Route path="content" element={<Content />} />
               <Route path="publish" element={<Publish />} />
