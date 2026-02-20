@@ -6,7 +6,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (username: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   verifyEmail: (token: string) => Promise<{ success: boolean; error?: string }>;
 }
@@ -18,21 +18,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is already logged in
     const initAuth = async () => {
       const token = localStorage.getItem('accessToken');
-      
+
       if (token) {
         try {
           const userData = await authApi.getCurrentUser();
           setUser(userData);
         } catch (error) {
-          console.error('Failed to fetch user:', error);
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
         }
       }
-      
+
       setIsLoading(false);
     };
 
@@ -43,41 +41,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const credentials: LoginCredentials = { email, password };
       const response = await authApi.login(credentials);
-      
-      // Store tokens
+
       localStorage.setItem('accessToken', response.accessToken);
       localStorage.setItem('refreshToken', response.refreshToken);
-      
-      // Fetch user data
+
       const userData = await authApi.getCurrentUser();
       setUser(userData);
-      
+
       return { success: true };
     } catch (error: any) {
-      console.error('Login failed:', error);
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Login failed. Please check your credentials.' 
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Login failed'
       };
     }
   };
 
-  const register = async (email: string, password: string) => {
+  const register = async (username: string, email: string, password: string) => {
     try {
-      const registerData: RegisterData = { email, password };
-      const response = await authApi.register(registerData);
-      
-      // Option 1: Auto-login after registration
-      // You can automatically log them in
-      // return await login(email, password);
-      
-      // Option 2: Return success and let them navigate to verify email
+      const registerData: RegisterData = { username, email, password };
+      await authApi.register(registerData);
+
       return { success: true };
     } catch (error: any) {
-      console.error('Registration failed:', error);
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Registration failed. Please try again.' 
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Registration failed'
       };
     }
   };
@@ -89,9 +78,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await authApi.logout(refreshToken);
       }
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error(error);
     } finally {
-      // Clear tokens and user state regardless of API success
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       setUser(null);
@@ -101,40 +89,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const verifyEmail = async (token: string) => {
     try {
       await authApi.verifyEmail(token);
-      
-      // Refresh user data to get updated email verification status
+
       if (localStorage.getItem('accessToken')) {
         const userData = await authApi.getCurrentUser();
         setUser(userData);
       }
-      
+
       return { success: true };
     } catch (error: any) {
-      console.error('Email verification failed:', error);
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Verification failed. Please try again.' 
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Verification failed'
       };
     }
   };
 
-  const value = {
-    user,
-    isAuthenticated: !!user,
-    isLoading,
-    login,
-    register,
-    logout,
-    verifyEmail,
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated: !!user,
+        isLoading,
+        login,
+        register,
+        logout,
+        verifyEmail
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider');
   }
   return context;
 };
