@@ -1,49 +1,87 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Youtube, Linkedin, Plus, CheckCircle, XCircle, Link2, Key } from "lucide-react";
-import type { ConnectedAccount } from "@/types";
+import { Youtube, Linkedin, CheckCircle, XCircle, Link2, RefreshCw } from "lucide-react";
+import { env } from "@/lib/env";
+import { publishingApi, type ConnectedAccountDto } from "@/lib/api";
 
 const platformIcons: Record<string, any> = { YouTube: Youtube, LinkedIn: Linkedin };
 const platformColors: Record<string, string> = { YouTube: "text-red-500", LinkedIn: "text-blue-600" };
 
 const Accounts = () => {
-  const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedPlatform, setSelectedPlatform] = useState<string>("");
-  const [accessToken, setAccessToken] = useState("");
-  const [accountName, setAccountName] = useState("");
+  const [accounts, setAccounts] = useState<ConnectedAccountDto[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [connectingPlatform, setConnectingPlatform] = useState<"youtube" | "linkedin" | null>(null);
 
-  const toggleAccount = (id: string) => {
-    setAccounts(prev => prev.map(a => a.id === id ? { ...a, is_active: !a.is_active } : a));
-  };
+  const loadAccounts = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await publishingApi.getConnectedAccounts();
+      setAccounts(data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load connected accounts.";
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-  const handleConnect = () => {
-    if (!selectedPlatform || !accessToken || !accountName) return;
+  useEffect(() => {
+    loadAccounts();
+  }, [loadAccounts]);
 
-    const newAccount: ConnectedAccount = {
-      id: Date.now().toString(),
-      platform: selectedPlatform,
-      account_name: accountName,
-      is_active: true,
-      access_token: accessToken
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const payload = event.data as { type?: string; message?: string };
+
+      if (payload?.type === "creatoros-oauth-success") {
+        setConnectingPlatform(null);
+        loadAccounts();
+      }
+
+      if (payload?.type === "creatoros-oauth-failed") {
+        setConnectingPlatform(null);
+        setError(payload.message || "OAuth connection failed.");
+      }
     };
 
-    setAccounts(prev => [...prev, newAccount]);
-    
-    // Reset form and close dialog
-    setSelectedPlatform("");
-    setAccessToken("");
-    setAccountName("");
-    setIsDialogOpen(false);
-  };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [loadAccounts]);
 
-  const showAccessToken = (token: string) => {
-    // Mask the token for display
-    return token ? `${token.substring(0, 8)}...${token.substring(token.length - 4)}` : '';
+  const handleConnect = async (platform: "youtube" | "linkedin") => {
+    setConnectingPlatform(platform);
+    setError(null);
+
+    try {
+      localStorage.setItem("creatoros_api_gateway_url", env.VITE_API_GATEWAY_URL);
+      const url =
+        platform === "youtube"
+          ? await publishingApi.getYouTubeLoginUrl()
+          : await publishingApi.getLinkedInLoginUrl();
+
+      const fallbackCallback = `${window.location.origin}/auth/${platform}/callback?provider=${platform}`;
+      const popupUrl = url || fallbackCallback;
+
+      const popup = window.open(popupUrl, `creatoros-${platform}-oauth`, "width=560,height=720");
+      if (!popup) {
+        throw new Error("Popup blocked. Please allow popups and try again.");
+      }
+
+      const poll = window.setInterval(() => {
+        if (popup.closed) {
+          window.clearInterval(poll);
+          setConnectingPlatform(null);
+        }
+      }, 500);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to start OAuth flow.";
+      setError(message);
+      setConnectingPlatform(null);
+    }
   };
 
   return (
@@ -53,73 +91,22 @@ const Accounts = () => {
           <h1 className="text-2xl font-bold">Connected Accounts</h1>
           <p className="text-muted-foreground text-sm">Manage your social media connections</p>
         </div>
-        
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline">
-              <Plus className="w-4 h-4 mr-2" /> Connect Account
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Connect New Account</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="platform">Platform</Label>
-                <select 
-                  id="platform"
-                  className="w-full p-2 rounded-md border border-input bg-background"
-                  value={selectedPlatform}
-                  onChange={(e) => setSelectedPlatform(e.target.value)}
-                >
-                  <option value="">Select platform</option>
-                  <option value="YouTube">YouTube</option>
-                  <option value="LinkedIn">LinkedIn</option>
-                </select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="accountName">Account Name</Label>
-                <Input 
-                  id="accountName"
-                  placeholder="e.g., My Business Account"
-                  value={accountName}
-                  onChange={(e) => setAccountName(e.target.value)}
-                />
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="accessToken">Access Token</Label>
-                <div className="relative">
-                  <Input 
-                    id="accessToken"
-                    type="password"
-                    placeholder="Enter your access token"
-                    value={accessToken}
-                    onChange={(e) => setAccessToken(e.target.value)}
-                    className="pr-10"
-                  />
-                  <Key className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Your access token is required to authenticate with the platform
-                </p>
-              </div>
-
-              <Button 
-                onClick={handleConnect} 
-                className="w-full"
-                disabled={!selectedPlatform || !accessToken || !accountName}
-              >
-                Connect Account
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => handleConnect("youtube")} disabled={!!connectingPlatform}>
+            {connectingPlatform === "youtube" ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Youtube className="w-4 h-4 mr-2" />} Connect YouTube
+          </Button>
+          <Button variant="outline" onClick={() => handleConnect("linkedin")} disabled={!!connectingPlatform}>
+            {connectingPlatform === "linkedin" ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Linkedin className="w-4 h-4 mr-2" />} Connect LinkedIn
+          </Button>
+        </div>
       </div>
 
-      {accounts.length === 0 ? (
+      {error && <Card className="p-3 bg-destructive/10 border-destructive/20 text-sm text-destructive">{error}</Card>}
+
+      {isLoading ? (
+        <Card className="p-6 bg-card border-border text-sm text-muted-foreground">Loading connected accounts...</Card>
+      ) : accounts.length === 0 ? (
         <Card className="p-12 bg-card border-border">
           <div className="flex flex-col items-center justify-center text-center space-y-4">
             <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center">
@@ -131,40 +118,34 @@ const Accounts = () => {
                 Connect your YouTube or LinkedIn accounts to start managing your social media presence
               </p>
             </div>
-            <Button onClick={() => setIsDialogOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" /> Connect Your First Account
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={() => handleConnect("youtube")}>Connect YouTube</Button>
+              <Button variant="outline" onClick={() => handleConnect("linkedin")}>Connect LinkedIn</Button>
+            </div>
           </div>
         </Card>
       ) : (
         <div className="grid sm:grid-cols-2 gap-4">
           {accounts.map(a => {
-            const Icon = platformIcons[a.platform] || Link2;
+            const platformLabel = a.platform === "YOUTUBE" ? "YouTube" : a.platform === "LINKEDIN" ? "LinkedIn" : a.platform;
+            const Icon = platformIcons[platformLabel] || Link2;
             return (
               <Card key={a.id} className="p-5 bg-card border-border">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg bg-secondary flex items-center justify-center ${platformColors[a.platform] || ''}`}>
+                    <div className={`w-10 h-10 rounded-lg bg-secondary flex items-center justify-center ${platformColors[platformLabel] || ''}`}>
                       <Icon className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="font-medium">{a.platform}</p>
-                      <p className="text-xs text-muted-foreground">{a.account_name}</p>
+                      <p className="font-medium">{platformLabel}</p>
+                      <p className="text-xs text-muted-foreground">{a.accountName}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {a.access_token && (
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground bg-secondary px-2 py-1 rounded-full">
-                        <Key className="w-3 h-3" />
-                        <span title={a.access_token}>{showAccessToken(a.access_token)}</span>
-                      </div>
-                    )}
-                    {a.is_active ? <CheckCircle className="w-5 h-5 text-green-400" /> : <XCircle className="w-5 h-5 text-muted-foreground" />}
-                  </div>
+                  {a.isActive ? <CheckCircle className="w-5 h-5 text-green-400" /> : <XCircle className="w-5 h-5 text-muted-foreground" />}
                 </div>
-                <Button variant={a.is_active ? "outline" : "default"} size="sm" onClick={() => toggleAccount(a.id)} className="w-full">
-                  {a.is_active ? "Disconnect" : "Reconnect"}
-                </Button>
+                <div className="text-xs text-muted-foreground">
+                  {a.accountType || "account"} • {a.isActive ? "active" : "inactive"}
+                </div>
               </Card>
             );
           })}

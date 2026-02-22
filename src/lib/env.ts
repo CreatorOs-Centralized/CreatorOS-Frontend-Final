@@ -8,6 +8,7 @@ export const env = createEnv({
       .string()
       .url()
       .default("https://creatoros-api.adharbattulwar.com"),
+    VITE_PUBLISHING_BASE_PATH: z.string().default("/publishing"),
   },
   runtimeEnv: import.meta.env,
   emptyStringAsUndefined: true,

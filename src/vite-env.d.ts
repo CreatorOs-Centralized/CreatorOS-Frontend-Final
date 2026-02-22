@@ -9,6 +9,7 @@ interface ImportMetaEnv {
   readonly VITE_KEYCLOAK_CLIENT_ID?: string;
   readonly VITE_KEYCLOAK_CLIENT_SECRET?: string;
   readonly VITE_API_GATEWAY_URL?: string;
+  readonly VITE_PUBLISHING_BASE_PATH?: string;
 }
 
 interface ImportMeta {

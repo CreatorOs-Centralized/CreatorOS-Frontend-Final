@@ -1,7 +1,8 @@
 export { authApi } from "./auth";
 export { profileApi, isProfileComplete } from "./profiles";
-export { assetsApi } from "./assets";
+export { assetApi } from "./assets";
 export { contentApi } from "./content";
+export { publishingApi } from "./publishing";
 
 export type {
 	LoginCredentials,
@@ -10,6 +11,15 @@ export type {
 	TokenResponse,
 	UserDto,
 } from "@/lib/validations/auth";
+
+export type {
+	AssetFolder,
+	CreateFolderRequest,
+	FolderContents,
+	MediaFile,
+	UploadFileRequest,
+	UploadStatus,
+} from "@/lib/validations/asset";
 
 export type {
 	ContentResponseDto,
@@ -26,3 +36,13 @@ export type {
 	SocialLinkResponseDto,
 	SocialPlatform,
 } from "@/lib/validations/profile";
+
+export type {
+	ConnectedAccountDto,
+	LinkedInPublishRequestDto,
+	LinkedInPublishResponseDto,
+	PublishedPostDto,
+	PublishingPlatform,
+	YouTubePublishRequestDto,
+	YouTubePublishResponseDto,
+} from "@/lib/validations/publishing";

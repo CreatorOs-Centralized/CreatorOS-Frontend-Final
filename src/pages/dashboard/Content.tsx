@@ -7,15 +7,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Upload, Video, Search, Filter, X } from "lucide-react";
-import { contentApi, type ContentResponseDto, type ContentType } from "@/lib/api";
+import { contentApi, assetApi, type ContentResponseDto, type ContentType } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 type ContentListItem = ContentResponseDto & {
   localVideoUrl?: string;
   localVideoName?: string;
   localVideoSize?: number;
+  mediaId?: string;
 };
 
 const Content = () => {
+  const { user } = useAuth();
   const [content, setContent] = useState<ContentListItem[]>([]);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -28,7 +31,9 @@ const Content = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [defaultFolderId, setDefaultFolderId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -53,6 +58,28 @@ const Content = () => {
     };
   }, []);
 
+  // Load or create default folder for uploads
+  useEffect(() => {
+    const ensureDefaultFolder = async () => {
+      if (!user?.id) return;
+      try {
+        const folders = await assetApi.getRootFolders(user.id);
+        let folder = folders.find(f => f.name === "Content Uploads");
+        if (!folder) {
+          folder = await assetApi.createFolder({
+            name: "Content Uploads",
+            description: "Default folder for content uploads",
+            userId: user.id,
+          });
+        }
+        setDefaultFolderId(folder.id);
+      } catch (err) {
+        console.error("Failed to ensure default folder:", err);
+      }
+    };
+    ensureDefaultFolder();
+  }, [user?.id]);
+
   const filtered = useMemo(() => {
     return content.filter((c) => {
       const matchSearch = c.title.toLowerCase().includes(search.toLowerCase());
@@ -70,6 +97,14 @@ const Content = () => {
   };
 
   const handleFile = (file: File) => {
+    // Validate file size (50MB limit)
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB in bytes
+    if (file.size > MAX_FILE_SIZE) {
+      setError(`File size exceeds 50MB limit. Your file is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Please upload a smaller file or contact support to increase the limit.`);
+      return;
+    }
+
+    setError(null);
     setVideoFile(file);
     const previewUrl = URL.createObjectURL(file);
     setVideoPreview(previewUrl);
@@ -108,20 +143,46 @@ const Content = () => {
       return;
     }
 
+    if (!user?.id) {
+      setError("User not authenticated.");
+      return;
+    }
+
     setIsUploading(true);
     setError(null);
+    setUploadProgress("");
 
     try {
+      let uploadedMediaId: string | undefined;
+
+      // Upload video file to asset service if present
+      if (videoFile && defaultFolderId) {
+        setUploadProgress("Uploading video...");
+        const uploadedFile = await assetApi.uploadFile({
+          file: videoFile,
+          userId: user.id,
+          folderId: defaultFolderId,
+        });
+        uploadedMediaId = uploadedFile.id;
+      }
+
+      setUploadProgress("Creating content...");
       const created = await contentApi.createContent({
         title: newTitle,
         contentType: newType,
       });
+
+      // Store mediaId in localStorage for later use in publishing
+      if (uploadedMediaId) {
+        localStorage.setItem(`content:${created.id}:mediaId`, uploadedMediaId);
+      }
 
       const item: ContentListItem = {
         ...created,
         localVideoUrl: videoPreview || undefined,
         localVideoName: videoFile?.name,
         localVideoSize: videoFile?.size,
+        mediaId: uploadedMediaId,
       };
 
       setContent((prev) => [item, ...prev]);
@@ -130,6 +191,7 @@ const Content = () => {
       setNewType("VIDEO");
       removeVideo();
       setDialogOpen(false);
+      setUploadProgress("");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to create content.";
       setError(message);
@@ -259,8 +321,12 @@ const Content = () => {
                 className="w-full gradient-primary border-0" 
                   disabled={!newTitle || isUploading}
               >
-                  {isUploading ? "Creating..." : "Create Content"}
+                  {isUploading ? (uploadProgress || "Creating...") : "Create Content"}
               </Button>
+              
+              {uploadProgress && (
+                <p className="text-xs text-center text-muted-foreground">{uploadProgress}</p>
+              )}
             </div>
           </DialogContent>
         </Dialog>
