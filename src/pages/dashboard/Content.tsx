@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { mockContent } from "@/data/mockData";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,25 +7,60 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Upload, Video, Search, Filter, X } from "lucide-react";
-import type { ContentItem } from "@/types";
+import { contentApi, type ContentResponseDto, type ContentType } from "@/lib/api";
+
+type ContentListItem = ContentResponseDto & {
+  localVideoUrl?: string;
+  localVideoName?: string;
+  localVideoSize?: number;
+};
 
 const Content = () => {
-  const [content, setContent] = useState<ContentItem[]>(mockContent);
+  const [content, setContent] = useState<ContentListItem[]>([]);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newSummary, setNewSummary] = useState("");
-  const [newType, setNewType] = useState("video");
+  const [newType, setNewType] = useState<ContentType>("VIDEO");
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoPreview, setVideoPreview] = useState<string>("");
   const [isDragging, setIsDragging] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = content.filter(c => {
-    const matchSearch = c.title.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === "all" || c.status === filterStatus;
-    return matchSearch && matchStatus;
-  });
+  useEffect(() => {
+    let isMounted = true;
+    const loadContents = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const items = await contentApi.getMyContents();
+        if (isMounted) setContent(items);
+      } catch (err) {
+        if (!isMounted) return;
+        const message = err instanceof Error ? err.message : "Failed to load content.";
+        setError(message);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    loadContents();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const filtered = useMemo(() => {
+    return content.filter((c) => {
+      const matchSearch = c.title.toLowerCase().includes(search.toLowerCase());
+      const status = c.workflowState.toLowerCase();
+      const matchStatus = filterStatus === "all" || status === filterStatus;
+      return matchSearch && matchStatus;
+    });
+  }, [content, search, filterStatus]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -68,33 +102,40 @@ const Content = () => {
     }
   };
 
-  const handleUpload = () => {
-    if (!videoFile) {
-      alert("Please select a video file");
+  const handleUpload = async () => {
+    if (!newTitle.trim()) {
+      setError("Please add a title before creating content.");
       return;
     }
 
-    const item: ContentItem = {
-      id: Date.now().toString(), 
-      user_id: "1", 
-      title: newTitle, 
-      summary: newSummary,
-      content_type: newType, 
-      status: "draft", 
-      scheduled_at: null, 
-      published_at: null,
-      created_at: new Date().toISOString(),
-      video_url: videoPreview, // Store video preview URL
-      video_name: videoFile.name,
-      video_size: videoFile.size,
-    };
-    
-    setContent([item, ...content]);
-    setNewTitle(""); 
-    setNewSummary(""); 
-    setNewType("video");
-    removeVideo();
-    setDialogOpen(false);
+    setIsUploading(true);
+    setError(null);
+
+    try {
+      const created = await contentApi.createContent({
+        title: newTitle,
+        contentType: newType,
+      });
+
+      const item: ContentListItem = {
+        ...created,
+        localVideoUrl: videoPreview || undefined,
+        localVideoName: videoFile?.name,
+        localVideoSize: videoFile?.size,
+      };
+
+      setContent((prev) => [item, ...prev]);
+      setNewTitle("");
+      setNewSummary("");
+      setNewType("VIDEO");
+      removeVideo();
+      setDialogOpen(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to create content.";
+      setError(message);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -202,10 +243,13 @@ const Content = () => {
                     <SelectValue placeholder="Select content type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="video">Video</SelectItem>
-                    <SelectItem value="short">Short</SelectItem>
-                    <SelectItem value="reel">Reel</SelectItem>
-                    <SelectItem value="post">Post</SelectItem>
+                      <SelectItem value="VIDEO">Video</SelectItem>
+                      <SelectItem value="SHORT_FORM">Short</SelectItem>
+                      <SelectItem value="BLOG_POST">Blog Post</SelectItem>
+                      <SelectItem value="PODCAST">Podcast</SelectItem>
+                      <SelectItem value="IMAGE">Image</SelectItem>
+                      <SelectItem value="NEWSLETTER">Newsletter</SelectItem>
+                      <SelectItem value="OTHER">Other</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -213,14 +257,20 @@ const Content = () => {
               <Button 
                 onClick={handleUpload} 
                 className="w-full gradient-primary border-0" 
-                disabled={!newTitle || !videoFile}
+                  disabled={!newTitle || isUploading}
               >
-                {videoFile ? 'Upload Content' : 'Select a video first'}
+                  {isUploading ? "Creating..." : "Create Content"}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
+
+        {error && (
+          <Card className="p-3 bg-destructive/10 border-destructive/20 text-destructive text-sm">
+            {error}
+          </Card>
+        )}
 
       <div className="flex gap-3">
         <div className="relative flex-1">
@@ -240,6 +290,7 @@ const Content = () => {
           <SelectContent>
             <SelectItem value="all">All</SelectItem>
             <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="review">Review</SelectItem>
             <SelectItem value="scheduled">Scheduled</SelectItem>
             <SelectItem value="published">Published</SelectItem>
           </SelectContent>
@@ -247,50 +298,62 @@ const Content = () => {
       </div>
 
       <div className="grid gap-3">
-        {filtered.map(c => (
-          <Card key={c.id} className="p-4 bg-card border-border flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center relative group">
-                {c.video_url ? (
-                  <video 
-                    src={c.video_url} 
-                    className="w-full h-full object-cover rounded-lg"
-                  />
-                ) : (
-                  <Video className="w-5 h-5 text-muted-foreground" />
-                )}
-              </div>
-              <div>
-                <p className="font-medium">{c.title}</p>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{c.content_type}</span>
-                  {c.video_name && (
-                    <>
-                      <span>•</span>
-                      <span>{c.video_name}</span>
-                    </>
+        {isLoading ? (
+          <Card className="p-4 bg-card border-border text-sm text-muted-foreground">
+            Loading content...
+          </Card>
+        ) : filtered.length === 0 ? (
+          <Card className="p-4 bg-card border-border text-sm text-muted-foreground">
+            No content yet. Create your first entry above.
+          </Card>
+        ) : (
+          filtered.map((c) => (
+            <Card key={c.id} className="p-4 bg-card border-border flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center relative group">
+                  {c.localVideoUrl ? (
+                    <video
+                      src={c.localVideoUrl}
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                  ) : (
+                    <Video className="w-5 h-5 text-muted-foreground" />
                   )}
-                  <span>•</span>
-                  <span>{new Date(c.created_at).toLocaleDateString()}</span>
+                </div>
+                <div>
+                  <p className="font-medium">{c.title}</p>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{c.contentType}</span>
+                    {c.localVideoName && (
+                      <>
+                        <span>•</span>
+                        <span>{c.localVideoName}</span>
+                      </>
+                    )}
+                    {c.createdAt && (
+                      <>
+                        <span>•</span>
+                        <span>{new Date(c.createdAt).toLocaleDateString()}</span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-            <span className={`text-xs px-2.5 py-1 rounded-full ${
-              c.status === 'published' 
-                ? 'bg-green-500/10 text-green-400' 
-                : c.status === 'scheduled' 
-                  ? 'bg-blue-500/10 text-blue-400' 
-                  : 'bg-secondary text-muted-foreground'
-            }`}>
-              {c.status}
-            </span>
-          </Card>
-        ))}
-        {filtered.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground">
-            <Video className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p>No content found</p>
-          </div>
+              <span
+                className={`text-xs px-2.5 py-1 rounded-full ${
+                  c.workflowState === "PUBLISHED"
+                    ? "bg-green-500/10 text-green-400"
+                    : c.workflowState === "SCHEDULED"
+                      ? "bg-blue-500/10 text-blue-400"
+                      : c.workflowState === "REVIEW"
+                        ? "bg-amber-500/10 text-amber-400"
+                        : "bg-secondary text-muted-foreground"
+                }`}
+              >
+                {c.workflowState.toLowerCase()}
+              </span>
+            </Card>
+          ))
         )}
       </div>
     </div>

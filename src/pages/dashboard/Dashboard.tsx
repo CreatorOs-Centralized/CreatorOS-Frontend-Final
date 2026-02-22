@@ -1,15 +1,43 @@
-import { mockContent, mockAnalyticsSummary, mockViewsOverTime } from "@/data/mockData";
+import { useEffect, useState } from "react";
+import { mockAnalyticsSummary, mockViewsOverTime } from "@/data/mockData";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card } from "@/components/ui/card";
 import { BarChart3, Eye, Heart, MessageSquare, Video, TrendingUp } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { contentApi, type ContentResponseDto } from "@/lib/api";
 
 const Dashboard = () => {
   const { profile, user } = useAuth();
+  const [recentContent, setRecentContent] = useState<ContentResponseDto[]>([]);
+  const [contentError, setContentError] = useState<string | null>(null);
+  const [isLoadingContent, setIsLoadingContent] = useState(true);
   const totalViews = mockAnalyticsSummary.reduce((a, b) => a + b.total_views, 0);
   const totalLikes = mockAnalyticsSummary.reduce((a, b) => a + b.total_likes, 0);
   const totalComments = mockAnalyticsSummary.reduce((a, b) => a + b.total_comments, 0);
   const totalPosts = mockAnalyticsSummary.reduce((a, b) => a + b.total_posts, 0);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadRecent = async () => {
+      setIsLoadingContent(true);
+      setContentError(null);
+      try {
+        const items = await contentApi.getMyContents();
+        if (isMounted) setRecentContent(items.slice(0, 4));
+      } catch (err) {
+        if (!isMounted) return;
+        const message = err instanceof Error ? err.message : "Failed to load recent content.";
+        setContentError(message);
+      } finally {
+        if (isMounted) setIsLoadingContent(false);
+      }
+    };
+
+    loadRecent();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const stats = [
     { label: "Total Views", value: totalViews.toLocaleString(), icon: Eye, color: "text-primary" },
@@ -76,7 +104,13 @@ const Dashboard = () => {
       <Card className="p-6 bg-card border-border">
         <h2 className="font-semibold mb-4">Recent Content</h2>
         <div className="space-y-3">
-          {mockContent.slice(0, 4).map(c => (
+          {contentError ? (
+            <div className="text-sm text-destructive">{contentError}</div>
+          ) : isLoadingContent ? (
+            <div className="text-sm text-muted-foreground">Loading content...</div>
+          ) : recentContent.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No content yet.</div>
+          ) : recentContent.map(c => (
             <div key={c.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
@@ -84,11 +118,11 @@ const Dashboard = () => {
                 </div>
                 <div>
                   <p className="text-sm font-medium">{c.title}</p>
-                  <p className="text-xs text-muted-foreground">{c.content_type}</p>
+                  <p className="text-xs text-muted-foreground">{c.contentType}</p>
                 </div>
               </div>
-              <span className={`text-xs px-2 py-1 rounded-full ${c.status === 'published' ? 'bg-green-500/10 text-green-400' : c.status === 'scheduled' ? 'bg-blue-500/10 text-blue-400' : 'bg-secondary text-muted-foreground'}`}>
-                {c.status}
+              <span className={`text-xs px-2 py-1 rounded-full ${c.workflowState === 'PUBLISHED' ? 'bg-green-500/10 text-green-400' : c.workflowState === 'SCHEDULED' ? 'bg-blue-500/10 text-blue-400' : c.workflowState === 'REVIEW' ? 'bg-amber-500/10 text-amber-400' : 'bg-secondary text-muted-foreground'}`}>
+                {c.workflowState.toLowerCase()}
               </span>
             </div>
           ))}

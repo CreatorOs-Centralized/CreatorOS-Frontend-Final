@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +8,44 @@ import { Switch } from "@/components/ui/switch";
 import { User, Bell, Shield } from "lucide-react";
 
 const Settings = () => {
-  const { user, profile } = useAuth();
+  const { user, profile, updateProfile } = useAuth();
+  const [form, setForm] = useState({
+    display_name: "",
+    username: "",
+    location: "",
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setForm({
+      display_name: profile?.display_name || "",
+      username: profile?.username || "",
+      location: profile?.location || "",
+    });
+  }, [profile]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setError(null);
+
+    const result = await updateProfile({
+      username: form.username,
+      display_name: form.display_name,
+      bio: profile?.bio || "",
+      niche: profile?.niche || "",
+      profile_photo_url: profile?.profile_photo_url || "",
+      location: form.location,
+      language: profile?.language || "",
+      is_public: profile?.is_public ?? true,
+    });
+
+    if (!result.success) {
+      setError(result.error || "Failed to save changes.");
+    }
+
+    setIsSaving(false);
+  };
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -18,10 +56,16 @@ const Settings = () => {
 
       <Card className="p-6 bg-card border-border space-y-4">
         <div className="flex items-center gap-2 mb-2"><User className="w-4 h-4 text-primary" /><h2 className="font-semibold">Profile</h2></div>
+        {error && (
+          <div className="text-sm text-destructive">{error}</div>
+        )}
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Display Name</Label>
-            <Input defaultValue={profile?.display_name || ""} />
+            <Input
+              value={form.display_name}
+              onChange={(event) => setForm((prev) => ({ ...prev, display_name: event.target.value }))}
+            />
           </div>
           <div className="space-y-2">
             <Label>Email</Label>
@@ -29,14 +73,22 @@ const Settings = () => {
           </div>
           <div className="space-y-2">
             <Label>Username</Label>
-            <Input defaultValue={profile?.username || ""} />
+            <Input
+              value={form.username}
+              onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
+            />
           </div>
           <div className="space-y-2">
             <Label>Location</Label>
-            <Input defaultValue={profile?.location || ""} />
+            <Input
+              value={form.location}
+              onChange={(event) => setForm((prev) => ({ ...prev, location: event.target.value }))}
+            />
           </div>
         </div>
-        <Button className="gradient-primary border-0">Save Changes</Button>
+        <Button className="gradient-primary border-0" onClick={handleSave} disabled={isSaving}>
+          {isSaving ? "Saving..." : "Save Changes"}
+        </Button>
       </Card>
 
       <Card className="p-6 bg-card border-border space-y-4">
