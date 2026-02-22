@@ -1,22 +1,10 @@
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import axios from 'axios';
-import { authApi, type UserDto, type LoginCredentials, type RegisterData } from '@/lib/api';
+import React, { createContext, useContext, useEffect, useCallback } from 'react';
+import { authApi, profileApi, isProfileComplete, type UserDto, type LoginCredentials, type RegisterData } from '@/lib/api';
 import type { CreatorProfile } from '@/types';
-import { profileApi, isProfileComplete } from '@/services/profile';
+import { tokenStorage } from '@/lib/auth/tokens';
+import { useAuthStore } from '@/stores/auth-store';
 
 const getProfileDataKey = (userId: string) => `creatoros.profile.data:${userId}`;
-
-const getApiErrorMessage = (error: unknown, fallback: string) => {
-  if (axios.isAxiosError(error)) {
-    const data = error.response?.data;
-    if (data && typeof data === 'object' && 'message' in data) {
-      const message = (data as { message?: unknown }).message;
-      if (typeof message === 'string' && message.trim() !== '') return message;
-    }
-  }
-  if (error instanceof Error && error.message) return error.message;
-  return fallback;
-};
 
 interface AuthContextType {
   user: UserDto | null;
@@ -33,9 +21,14 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<UserDto | null>(null);
-  const [profile, setProfile] = useState<CreatorProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const user = useAuthStore((state) => state.user);
+  const profile = useAuthStore((state) => state.profile);
+  const isLoading = useAuthStore((state) => state.isLoading);
+  const setUser = useAuthStore((state) => state.setUser);
+  const setProfile = useAuthStore((state) => state.setProfile);
+  const setIsLoading = useAuthStore((state) => state.setIsLoading);
+  const setTokens = useAuthStore((state) => state.setTokens);
+  const clearAuth = useAuthStore((state) => state.clearAuth);
 
   const hydrateUser = useCallback((userData: UserDto): UserDto => {
     if (!userData?.id) return userData;
@@ -73,7 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const initAuth = async () => {
-      const token = localStorage.getItem('accessToken');
+      const token = tokenStorage.getAccessToken();
 
       if (token) {
         try {
@@ -86,9 +79,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setProfile(loadedProfile);
           setUser(applyProfileToUser(hydrated, loadedProfile));
         } catch (error) {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
+          tokenStorage.clear();
           setProfile(null);
+          setUser(null);
         }
       }
 
@@ -103,8 +96,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const credentials: LoginCredentials = { email, password };
       const response = await authApi.login(credentials);
 
-      localStorage.setItem('accessToken', response.accessToken);
-      localStorage.setItem('refreshToken', response.refreshToken);
+      setTokens({ accessToken: response.accessToken, refreshToken: response.refreshToken });
 
       const [rawUser, loadedProfile] = await Promise.all([
         authApi.getCurrentUser(),
@@ -121,7 +113,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: unknown) {
       return {
         success: false,
-        error: getApiErrorMessage(error, 'Login failed')
+        error: authApi.getErrorMessage(error, 'Login failed')
       };
     }
   };
@@ -135,7 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: unknown) {
       return {
         success: false,
-        error: getApiErrorMessage(error, 'Registration failed')
+        error: authApi.getErrorMessage(error, 'Registration failed')
       };
     }
   };
@@ -162,34 +154,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       setProfile(updatedProfile);
-      setUser((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
+      if (user) {
+        setUser({
+          ...user,
           isProfileComplete: isProfileComplete(updatedProfile),
           profileData,
-        };
-      });
+        });
+      }
 
       return { success: true };
     } catch (error: unknown) {
-      return { success: false, error: getApiErrorMessage(error, 'Failed to update profile') };
+      return { success: false, error: authApi.getErrorMessage(error, 'Failed to update profile') };
     }
   };
 
   const logout = async () => {
     try {
-      const refreshToken = localStorage.getItem('refreshToken');
+      const refreshToken = tokenStorage.getRefreshToken();
       if (refreshToken) {
         await authApi.logout(refreshToken);
       }
     } catch (error) {
       console.error(error);
     } finally {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      setUser(null);
-      setProfile(null);
+      clearAuth();
     }
   };
 
@@ -197,7 +185,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await authApi.verifyEmail(token);
 
-      if (localStorage.getItem('accessToken')) {
+      if (tokenStorage.getAccessToken()) {
         const [rawUser, loadedProfile] = await Promise.all([
           authApi.getCurrentUser(),
           profileApi.getMyProfile(),
@@ -212,7 +200,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: unknown) {
       return {
         success: false,
-        error: getApiErrorMessage(error, 'Verification failed')
+        error: authApi.getErrorMessage(error, 'Verification failed')
       };
     }
   };

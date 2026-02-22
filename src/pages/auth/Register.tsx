@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Zap, AlertCircle } from "lucide-react";
+import { registerDataSchema } from "@/lib/validations/auth";
 
 const Register = () => {
   const [username, setUsername] = useState("");
@@ -22,18 +23,15 @@ const Register = () => {
     e.preventDefault();
     setError("");
 
-    if (!username.trim()) {
-      setError("Username is required");
+    const parsed = registerDataSchema.safeParse({ username, email, password });
+    if (!parsed.success) {
+      const firstMessage = parsed.error.issues[0]?.message;
+      setError(firstMessage || "Please enter valid registration details.");
       return;
     }
 
     if (password !== confirmPassword) {
       setError("Passwords don't match");
-      return;
-    }
-
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
       return;
     }
 

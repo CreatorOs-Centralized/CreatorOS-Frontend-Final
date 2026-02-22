@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Mail, Zap, AlertCircle } from "lucide-react";
 import { authApi } from "@/lib/api";
+import { passwordResetRequestSchema } from "@/lib/validations/auth";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
@@ -16,6 +17,14 @@ const ForgotPassword = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    const parsed = passwordResetRequestSchema.safeParse({ email });
+    if (!parsed.success) {
+      const firstMessage = parsed.error.issues[0]?.message;
+      setError(firstMessage || "Please enter a valid email address.");
+      return;
+    }
+
     setLoading(true);
     
     try {

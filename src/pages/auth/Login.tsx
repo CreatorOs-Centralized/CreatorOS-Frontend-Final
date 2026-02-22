@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Zap, AlertCircle } from "lucide-react";
+import { loginCredentialsSchema } from "@/lib/validations/auth";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -25,6 +26,14 @@ const Login = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    const parsed = loginCredentialsSchema.safeParse({ email, password });
+    if (!parsed.success) {
+      const firstMessage = parsed.error.issues[0]?.message;
+      setError(firstMessage || "Please enter a valid email and password.");
+      return;
+    }
+
     setLoading(true);
     
     const result = await login(email, password);
