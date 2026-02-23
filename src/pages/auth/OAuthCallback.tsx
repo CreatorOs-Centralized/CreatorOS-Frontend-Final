@@ -102,11 +102,6 @@ const OAuthCallback = () => {
         const token = localStorage.getItem("accessToken");
         if (!token) throw new Error("Missing access token in local storage.");
 
-        const callbackUrl =
-          provider === "youtube"
-            ? `${env.VITE_API_GATEWAY_URL}/oauth/youtube/callback?code=${encodeURIComponent(code)}${stateParam ? `&state=${encodeURIComponent(stateParam)}` : ""}`
-            : `${env.VITE_API_GATEWAY_URL}/oauth/linkedin/callback?code=${encodeURIComponent(code)}`;
-
         const headers: HeadersInit = {
           Authorization: `Bearer ${token}`,
         };
@@ -120,13 +115,48 @@ const OAuthCallback = () => {
           headers["X-User-Id"] = userId;
         }
 
-        const response = await fetch(callbackUrl, {
-          method: "GET",
-          headers,
-        });
+        let response: Response | null = null;
+        let lastError: Error | null = null;
 
-        if (!response.ok) {
-          const text = await response.text();
+        if (provider === "youtube") {
+          const callbackUrl = `${env.VITE_API_GATEWAY_URL}/oauth/youtube/callback?code=${encodeURIComponent(code)}${stateParam ? `&state=${encodeURIComponent(stateParam)}` : ""}`;
+          response = await fetch(callbackUrl, {
+            method: "GET",
+            headers,
+          });
+        } else if (provider === "linkedin") {
+          const linkedinUrls = [
+            `${env.VITE_API_GATEWAY_URL}/oauth/linkedin/callback?code=${encodeURIComponent(code)}`,
+            `${env.VITE_API_GATEWAY_URL}/publishing/linkedin/callback?code=${encodeURIComponent(code)}`,
+          ];
+
+          for (const url of linkedinUrls) {
+            try {
+              const resp = await fetch(url, {
+                method: "GET",
+                headers,
+              });
+              if (resp.ok) {
+                response = resp;
+                break;
+              }
+              if (!lastError && !resp.ok) {
+                lastError = new Error(`${url} returned ${resp.status}`);
+              }
+            } catch (err) {
+              if (!lastError) {
+                lastError = err instanceof Error ? err : new Error(String(err));
+              }
+            }
+          }
+
+          if (!response && lastError) {
+            throw lastError;
+          }
+        }
+
+        if (!response || !response.ok) {
+          const text = response ? await response.text() : "";
           throw new Error(text || "OAuth callback failed.");
         }
 
