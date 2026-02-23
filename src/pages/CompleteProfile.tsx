@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { assetApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,6 +44,29 @@ const CompleteProfile = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const updateAvatarPreview = (nextUrl: string) => {
+    setAvatarPreview((currentUrl) => {
+      if (currentUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(currentUrl);
+      }
+      return nextUrl;
+    });
+  };
+
+  const loadAvatarPreview = async (pathOrUrl: string) => {
+    if (!pathOrUrl.trim()) {
+      updateAvatarPreview("");
+      return;
+    }
+
+    try {
+      const objectUrl = await assetApi.getAuthorizedAssetObjectUrl(pathOrUrl);
+      updateAvatarPreview(objectUrl);
+    } catch {
+      updateAvatarPreview("");
+    }
+  };
+
   useEffect(() => {
     if (isAuthenticated && user?.isProfileComplete) {
       navigate("/dashboard", { replace: true });
@@ -65,22 +89,42 @@ const CompleteProfile = () => {
     }));
 
     if (profile.profile_photo_url) {
-      setAvatarPreview(profile.profile_photo_url);
+      void loadAvatarPreview(profile.profile_photo_url);
     }
   }, [profile]);
 
   // Pre-fill extra fields that are UI-only (local persistence)
   useEffect(() => {
     if (user?.profileData) {
+      const toText = (value: unknown, fallback: string) =>
+        typeof value === "string" ? value : fallback;
+
       setForm(prev => ({
         ...prev,
-        ...user.profileData,
+        username: toText(user.profileData.username, prev.username),
+        display_name: toText(user.profileData.display_name, prev.display_name),
+        fullName: toText(user.profileData.fullName, prev.fullName),
+        bio: toText(user.profileData.bio, prev.bio),
+        niche: toText(user.profileData.niche, prev.niche),
+        profile_photo_url: toText(user.profileData.profile_photo_url, prev.profile_photo_url),
+        location: toText(user.profileData.location, prev.location),
+        language: toText(user.profileData.language, prev.language),
+        dateOfBirth: toText(user.profileData.dateOfBirth, prev.dateOfBirth),
       }));
-      if (user.profileData.profile_photo_url) {
-        setAvatarPreview(user.profileData.profile_photo_url);
+      const profilePhotoUrl = user.profileData.profile_photo_url;
+      if (typeof profilePhotoUrl === "string" && profilePhotoUrl.trim()) {
+        void loadAvatarPreview(profilePhotoUrl);
       }
     }
   }, [user]);
+
+  useEffect(() => {
+    return () => {
+      if (avatarPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(avatarPreview);
+      }
+    };
+  }, [avatarPreview]);
 
   const languages = [
     { value: "en", label: "English" },
@@ -107,6 +151,19 @@ const CompleteProfile = () => {
     setForm(updated);
   };
 
+  const ensureAssetFolder = async (folderName: string): Promise<string> => {
+    const folders = await assetApi.getRootFolders();
+    const existing = folders.find((folder) => folder.name.toLowerCase() === folderName.toLowerCase());
+    if (existing) return existing.id;
+
+    const created = await assetApi.createFolder({
+      name: folderName,
+      description: `${folderName} uploads`,
+    });
+
+    return created.id;
+  };
+
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -124,7 +181,7 @@ const CompleteProfile = () => {
 
       setAvatar(file);
       const previewUrl = URL.createObjectURL(file);
-      setAvatarPreview(previewUrl);
+      updateAvatarPreview(previewUrl);
       update("profile_photo_url", previewUrl);
       setError("");
     }
@@ -210,18 +267,22 @@ const CompleteProfile = () => {
 
     try {
       let avatarUrl = form.profile_photo_url;
-      
-      // In a real implementation, you would upload the file to your storage service
-      // and get back a URL. For now, we'll use the preview URL.
+
       if (avatar) {
-        // This is where you'd upload to S3, Cloudinary, etc.
-        // const uploadResult = await uploadAvatar(avatar);
-        // avatarUrl = uploadResult.url;
-        avatarUrl = avatarPreview;
+        const profilePhotoFolderId = await ensureAssetFolder("profilephoto");
+        const uploadedAsset = await assetApi.uploadFile({
+          file: avatar,
+          folderId: profilePhotoFolderId,
+        });
+
+        avatarUrl = uploadedAsset.publicUrl?.trim()
+          ? uploadedAsset.publicUrl
+          : assetApi.getFileViewUrl(uploadedAsset.id);
       }
 
       const profileData = {
         ...form,
+        profile_photo_url: avatarUrl,
         avatar: avatarUrl,
       };
 

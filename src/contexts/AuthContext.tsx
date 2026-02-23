@@ -148,6 +148,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         bio: asString(profileData.bio),
         niche: asString(profileData.niche),
         profile_photo_url: asString(profileData.profile_photo_url),
+        cover_photo_url: asString(profileData.cover_photo_url),
         location: asString(profileData.location),
         language: asString(profileData.language),
         is_public: typeof profileData.is_public === 'boolean' ? profileData.is_public : true,

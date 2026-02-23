@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { assetApi } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { User, Bell, Shield } from "lucide-react";
+import { User, Bell, Shield, Upload } from "lucide-react";
 
 const Settings = () => {
   const { user, profile, updateProfile } = useAuth();
@@ -13,35 +14,229 @@ const Settings = () => {
     display_name: "",
     username: "",
     location: "",
+    cover_photo_url: "",
   });
+  const [coverPhoto, setCoverPhoto] = useState<File | null>(null);
+  const [coverPhotoPreview, setCoverPhotoPreview] = useState("");
+  const [profilePhoto, setProfilePhoto] = useState<File | null>(null);
+  const [profilePhotoPreview, setProfilePhotoPreview] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const updateCoverPreview = (nextUrl: string) => {
+    setCoverPhotoPreview((currentUrl) => {
+      if (currentUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(currentUrl);
+      }
+      return nextUrl;
+    });
+  };
+
+  const updateProfilePhotoPreview = (nextUrl: string) => {
+    setProfilePhotoPreview((currentUrl) => {
+      if (currentUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(currentUrl);
+      }
+      return nextUrl;
+    });
+  };
 
   useEffect(() => {
     setForm({
       display_name: profile?.display_name || "",
       username: profile?.username || "",
       location: profile?.location || "",
+      cover_photo_url: profile?.cover_photo_url || "",
     });
+
+    let isMounted = true;
+
+    const loadCoverPreview = async () => {
+      const coverPhotoUrl = profile?.cover_photo_url || "";
+      if (!coverPhotoUrl.trim()) {
+        updateCoverPreview("");
+        return;
+      }
+
+      try {
+        const objectUrl = await assetApi.getAuthorizedAssetObjectUrl(coverPhotoUrl);
+        if (isMounted) {
+          updateCoverPreview(objectUrl);
+        } else {
+          URL.revokeObjectURL(objectUrl);
+        }
+      } catch {
+        if (isMounted) {
+          updateCoverPreview("");
+        }
+      }
+    };
+
+    const loadProfilePhotoPreview = async () => {
+      const nextProfilePhotoUrl = profile?.profile_photo_url || "";
+      if (!nextProfilePhotoUrl.trim()) {
+        updateProfilePhotoPreview("");
+        return;
+      }
+
+      try {
+        const objectUrl = await assetApi.getAuthorizedAssetObjectUrl(nextProfilePhotoUrl);
+        if (isMounted) {
+          updateProfilePhotoPreview(objectUrl);
+        } else {
+          URL.revokeObjectURL(objectUrl);
+        }
+      } catch {
+        if (isMounted) {
+          updateProfilePhotoPreview("");
+        }
+      }
+    };
+
+    void loadCoverPreview();
+    void loadProfilePhotoPreview();
+
+    return () => {
+      isMounted = false;
+    };
   }, [profile]);
+
+  useEffect(() => {
+    return () => {
+      if (coverPhotoPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(coverPhotoPreview);
+      }
+    };
+  }, [coverPhotoPreview]);
+
+  useEffect(() => {
+    return () => {
+      if (profilePhotoPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(profilePhotoPreview);
+      }
+    };
+  }, [profilePhotoPreview]);
+
+  const ensureAssetFolder = async (folderName: string): Promise<string> => {
+    const folders = await assetApi.getRootFolders();
+    const existing = folders.find((folder) => folder.name.toLowerCase() === folderName.toLowerCase());
+    if (existing) return existing.id;
+
+    const created = await assetApi.createFolder({
+      name: folderName,
+      description: `${folderName} uploads`,
+    });
+
+    return created.id;
+  };
+
+  const handleCoverPhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please upload an image file for cover photo.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Cover photo size must be less than 5MB.");
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setCoverPhoto(file);
+    updateCoverPreview(previewUrl);
+    setError(null);
+  };
+
+  const handleProfilePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please upload an image file for profile photo.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Profile photo size must be less than 5MB.");
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setProfilePhoto(file);
+    updateProfilePhotoPreview(previewUrl);
+    setError(null);
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
     setError(null);
 
-    const result = await updateProfile({
-      username: form.username,
-      display_name: form.display_name,
-      bio: profile?.bio || "",
-      niche: profile?.niche || "",
-      profile_photo_url: profile?.profile_photo_url || "",
-      location: form.location,
-      language: profile?.language || "",
-      is_public: profile?.is_public ?? true,
-    });
+    let coverPhotoUrl = form.cover_photo_url;
+    let profilePhotoUrl = profile?.profile_photo_url || "";
 
-    if (!result.success) {
-      setError(result.error || "Failed to save changes.");
+    try {
+      if (coverPhoto) {
+        const coverPhotoFolderId = await ensureAssetFolder("coverphoto");
+        const uploadedAsset = await assetApi.uploadFile({
+          file: coverPhoto,
+          folderId: coverPhotoFolderId,
+        });
+
+        coverPhotoUrl = uploadedAsset.publicUrl?.trim()
+          ? uploadedAsset.publicUrl
+          : assetApi.getFileViewUrl(uploadedAsset.id);
+      }
+
+      if (profilePhoto) {
+        const profilePhotoFolderId = await ensureAssetFolder("profilephoto");
+        const uploadedAsset = await assetApi.uploadFile({
+          file: profilePhoto,
+          folderId: profilePhotoFolderId,
+        });
+
+        profilePhotoUrl = uploadedAsset.publicUrl?.trim()
+          ? uploadedAsset.publicUrl
+          : assetApi.getFileViewUrl(uploadedAsset.id);
+      }
+
+      const result = await updateProfile({
+        username: form.username,
+        display_name: form.display_name,
+        bio: profile?.bio || "",
+        niche: profile?.niche || "",
+        profile_photo_url: profilePhotoUrl,
+        cover_photo_url: coverPhotoUrl,
+        location: form.location,
+        language: profile?.language || "",
+        is_public: profile?.is_public ?? true,
+      });
+
+      if (!result.success) {
+        setError(result.error || "Failed to save changes.");
+      } else {
+        setCoverPhoto(null);
+        setProfilePhoto(null);
+        setForm((prev) => ({ ...prev, cover_photo_url: coverPhotoUrl }));
+
+        try {
+          const objectUrl = await assetApi.getAuthorizedAssetObjectUrl(coverPhotoUrl);
+          updateCoverPreview(objectUrl);
+        } catch {
+          updateCoverPreview("");
+        }
+
+        try {
+          const objectUrl = await assetApi.getAuthorizedAssetObjectUrl(profilePhotoUrl);
+          updateProfilePhotoPreview(objectUrl);
+        } catch {
+          updateProfilePhotoPreview("");
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save changes.");
     }
 
     setIsSaving(false);
@@ -59,6 +254,55 @@ const Settings = () => {
         {error && (
           <div className="text-sm text-destructive">{error}</div>
         )}
+        <div className="space-y-2">
+          <Label>Profile Photo</Label>
+          <div className="flex items-center gap-4">
+            <label
+              htmlFor="profile-photo-upload"
+              className="w-20 h-20 rounded-full border border-border bg-muted/30 overflow-hidden cursor-pointer flex items-center justify-center"
+            >
+              {profilePhotoPreview ? (
+                <img src={profilePhotoPreview} alt="Profile preview" className="w-full h-full object-cover" />
+              ) : (
+                <Upload className="w-4 h-4 text-muted-foreground" />
+              )}
+            </label>
+            <div className="text-xs text-muted-foreground">
+              PNG, JPG, WEBP up to 5MB
+            </div>
+          </div>
+          <input
+            id="profile-photo-upload"
+            type="file"
+            accept="image/*"
+            onChange={handleProfilePhotoChange}
+            className="hidden"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Cover Photo</Label>
+          <label
+            htmlFor="cover-photo-upload"
+            className="block w-full cursor-pointer rounded-lg border border-border bg-muted/30 overflow-hidden"
+          >
+            {coverPhotoPreview ? (
+              <img src={coverPhotoPreview} alt="Cover preview" className="h-36 w-full object-cover" />
+            ) : (
+              <div className="h-36 w-full flex items-center justify-center text-muted-foreground text-sm gap-2">
+                <Upload className="w-4 h-4" />
+                Upload cover photo
+              </div>
+            )}
+          </label>
+          <input
+            id="cover-photo-upload"
+            type="file"
+            accept="image/*"
+            onChange={handleCoverPhotoChange}
+            className="hidden"
+          />
+          <p className="text-xs text-muted-foreground">PNG, JPG, WEBP up to 5MB</p>
+        </div>
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Display Name</Label>

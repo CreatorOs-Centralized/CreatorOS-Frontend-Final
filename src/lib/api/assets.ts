@@ -19,6 +19,36 @@ const ASSET_BASE_PATH = "/assets";
  * Handles file uploads, folder management, and asset retrieval
  */
 export const assetApi = {
+  resolveAssetUrl(pathOrUrl: string): string {
+    if (!pathOrUrl) return "";
+    if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+
+    const base = env.VITE_API_GATEWAY_URL.replace(/\/$/, "");
+    const path = pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`;
+    return `${base}${path}`;
+  },
+
+  async getAuthorizedAssetObjectUrl(pathOrUrl: string): Promise<string> {
+    const resolvedUrl = this.resolveAssetUrl(pathOrUrl);
+    if (!resolvedUrl) {
+      throw new Error("Missing asset URL");
+    }
+
+    const token = tokenStorage.getAccessToken();
+    const response = await fetch(resolvedUrl, {
+      method: "GET",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || "Resource not found or access denied");
+    }
+
+    const fileBlob = await response.blob();
+    return URL.createObjectURL(fileBlob);
+  },
+
   /**
    * Upload a file to a folder
    */

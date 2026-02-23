@@ -1,8 +1,9 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { assetApi } from "@/lib/api";
 import NotificationDropdown from "@/components/NotificationDropdown";
 import { LayoutDashboard, Video, Send, BarChart3, Settings, LogOut, Zap, Menu, X, Link2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", end: true },
@@ -17,6 +18,55 @@ const DashboardLayout = () => {
   const { user, profile, logout } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profilePhotoPreview, setProfilePhotoPreview] = useState("");
+
+  const updateProfilePhotoPreview = (nextUrl: string) => {
+    setProfilePhotoPreview((currentUrl) => {
+      if (currentUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(currentUrl);
+      }
+      return nextUrl;
+    });
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProfilePhoto = async () => {
+      const nextProfilePhotoUrl = profile?.profile_photo_url || "";
+      if (!nextProfilePhotoUrl.trim()) {
+        updateProfilePhotoPreview("");
+        return;
+      }
+
+      try {
+        const objectUrl = await assetApi.getAuthorizedAssetObjectUrl(nextProfilePhotoUrl);
+        if (isMounted) {
+          updateProfilePhotoPreview(objectUrl);
+        } else {
+          URL.revokeObjectURL(objectUrl);
+        }
+      } catch {
+        if (isMounted) {
+          updateProfilePhotoPreview("");
+        }
+      }
+    };
+
+    void loadProfilePhoto();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [profile?.profile_photo_url]);
+
+  useEffect(() => {
+    return () => {
+      if (profilePhotoPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(profilePhotoPreview);
+      }
+    };
+  }, [profilePhotoPreview]);
 
   const handleLogout = () => {
     logout();
@@ -72,7 +122,11 @@ const DashboardLayout = () => {
           <div className="flex items-center gap-3">
             <NotificationDropdown />
             <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-xs font-bold text-primary-foreground">
-              {(profile?.display_name || user?.email || "U")[0].toUpperCase()}
+              {profilePhotoPreview ? (
+                <img src={profilePhotoPreview} alt="Profile" className="w-full h-full object-cover rounded-full" />
+              ) : (
+                (profile?.display_name || user?.email || "U")[0].toUpperCase()
+              )}
             </div>
           </div>
         </header>
