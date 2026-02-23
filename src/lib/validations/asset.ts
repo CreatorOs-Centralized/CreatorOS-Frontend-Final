@@ -49,7 +49,6 @@ export type FolderContents = z.infer<typeof FolderContentsSchema>;
 // Request schemas
 export const CreateFolderRequestSchema = z.object({
   name: z.string().min(1),
-  userId: z.string().uuid(),
   description: z.string().optional(),
   parentFolderId: z.string().uuid().optional(),
 });
@@ -57,7 +56,6 @@ export type CreateFolderRequest = z.infer<typeof CreateFolderRequestSchema>;
 
 export const UploadFileRequestSchema = z.object({
   file: z.instanceof(File),
-  userId: z.string().uuid(),
   folderId: z.string().uuid(),
 });
 export type UploadFileRequest = z.infer<typeof UploadFileRequestSchema>;

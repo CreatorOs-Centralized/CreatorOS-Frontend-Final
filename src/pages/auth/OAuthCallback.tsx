@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useParams } from "react-router-dom";
 
 import { env } from "@/lib/env";
+import { useAuthStore } from "@/stores/auth-store";
 
 type CallbackState = {
   title: string;
@@ -14,6 +15,53 @@ type Provider = (typeof PROVIDERS)[number];
 
 const isProvider = (value: string | null): value is Provider => {
   return Boolean(value && PROVIDERS.includes(value as Provider));
+};
+
+const decodeJwtUserId = (token: string): string | null => {
+  const parts = token.split(".");
+  if (parts.length < 2) return null;
+
+  try {
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    const payload = JSON.parse(atob(padded)) as {
+      sub?: unknown;
+      userId?: unknown;
+      user_id?: unknown;
+      uid?: unknown;
+    };
+
+    if (typeof payload.userId === "string" && payload.userId.trim()) return payload.userId;
+    if (typeof payload.user_id === "string" && payload.user_id.trim()) return payload.user_id;
+    if (typeof payload.uid === "string" && payload.uid.trim()) return payload.uid;
+    if (typeof payload.sub === "string" && payload.sub.trim()) return payload.sub;
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const resolveUserIdForLinkedInCallback = async (token: string): Promise<string | null> => {
+  const cachedUserId = useAuthStore.getState().user?.id;
+  if (cachedUserId) return cachedUserId;
+
+  const tokenUserId = decodeJwtUserId(token);
+  if (tokenUserId) return tokenUserId;
+
+  try {
+    const response = await fetch(`${env.VITE_API_GATEWAY_URL}/auth/me`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) return null;
+    const data = (await response.json()) as { id?: unknown };
+    return typeof data.id === "string" && data.id.trim() ? data.id : null;
+  } catch {
+    return null;
+  }
 };
 
 const OAuthCallback = () => {
@@ -59,11 +107,22 @@ const OAuthCallback = () => {
             ? `${env.VITE_API_GATEWAY_URL}/oauth/youtube/callback?code=${encodeURIComponent(code)}${stateParam ? `&state=${encodeURIComponent(stateParam)}` : ""}`
             : `${env.VITE_API_GATEWAY_URL}/oauth/linkedin/callback?code=${encodeURIComponent(code)}`;
 
+        const headers: HeadersInit = {
+          Authorization: `Bearer ${token}`,
+        };
+
+        if (provider === "linkedin") {
+          const userId = await resolveUserIdForLinkedInCallback(token);
+          if (!userId) {
+            throw new Error("Missing user context for LinkedIn callback.");
+          }
+
+          headers["X-User-Id"] = userId;
+        }
+
         const response = await fetch(callbackUrl, {
           method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers,
         });
 
         if (!response.ok) {

@@ -25,7 +25,6 @@ export const assetApi = {
   async uploadFile(request: UploadFileRequest): Promise<MediaFile> {
     const formData = new FormData();
     formData.append("file", request.file);
-    formData.append("userId", request.userId);
     formData.append("folderId", request.folderId);
 
     const token = tokenStorage.getAccessToken();
@@ -50,7 +49,6 @@ export const assetApi = {
   async createFolder(request: CreateFolderRequest): Promise<AssetFolder> {
     const params = new URLSearchParams();
     params.set("name", request.name);
-    params.set("userId", request.userId);
     if (request.description) {
       params.set("description", request.description);
     }
@@ -79,10 +77,10 @@ export const assetApi = {
   /**
    * Get folder contents (subfolders and files)
    */
-  async getFolderContents(userId: string, folderId: string): Promise<FolderContents> {
+  async getFolderContents(folderId: string): Promise<FolderContents> {
     const token = tokenStorage.getAccessToken();
     const response = await fetch(
-      `${env.VITE_API_GATEWAY_URL}${ASSET_BASE_PATH}/folders/${folderId}?userId=${encodeURIComponent(userId)}`,
+      `${env.VITE_API_GATEWAY_URL}${ASSET_BASE_PATH}/folders/${folderId}`,
       {
         method: "GET",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -101,10 +99,10 @@ export const assetApi = {
   /**
    * Get root-level folders for a user
    */
-  async getRootFolders(userId: string): Promise<AssetFolder[]> {
+  async getRootFolders(): Promise<AssetFolder[]> {
     const token = tokenStorage.getAccessToken();
     const response = await fetch(
-      `${env.VITE_API_GATEWAY_URL}${ASSET_BASE_PATH}/folders/root?userId=${encodeURIComponent(userId)}`,
+      `${env.VITE_API_GATEWAY_URL}${ASSET_BASE_PATH}/folders/root`,
       {
         method: "GET",
         headers: token ? { Authorization: `Bearer ${token}` } : {},

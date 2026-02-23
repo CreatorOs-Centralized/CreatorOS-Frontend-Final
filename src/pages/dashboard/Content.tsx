@@ -63,13 +63,12 @@ const Content = () => {
     const ensureDefaultFolder = async () => {
       if (!user?.id) return;
       try {
-        const folders = await assetApi.getRootFolders(user.id);
+        const folders = await assetApi.getRootFolders();
         let folder = folders.find(f => f.name === "Content Uploads");
         if (!folder) {
           folder = await assetApi.createFolder({
             name: "Content Uploads",
             description: "Default folder for content uploads",
-            userId: user.id,
           });
         }
         setDefaultFolderId(folder.id);
@@ -160,7 +159,6 @@ const Content = () => {
         setUploadProgress("Uploading video...");
         const uploadedFile = await assetApi.uploadFile({
           file: videoFile,
-          userId: user.id,
           folderId: defaultFolderId,
         });
         uploadedMediaId = uploadedFile.id;
@@ -300,7 +298,7 @@ const Content = () => {
               </div>
               <div className="space-y-2">
                 <Label>Content Type</Label>
-                <Select value={newType} onValueChange={setNewType}>
+                <Select value={newType} onValueChange={(value) => setNewType(value as ContentType)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select content type" />
                   </SelectTrigger>
