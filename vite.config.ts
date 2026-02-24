@@ -45,5 +45,11 @@ export default defineConfig(({ mode }) => {
     optimizeDeps: {
       include: ["@tanstack/react-query"],
     },
+    build: {
+      outDir: "dist",
+      rollupOptions: {
+        input: "index.html",
+      },
+    },
   };
 });
