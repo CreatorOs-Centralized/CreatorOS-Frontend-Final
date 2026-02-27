@@ -3,6 +3,7 @@ export { profileApi, isProfileComplete } from "./profiles";
 export { assetApi } from "./assets";
 export { contentApi } from "./content";
 export { publishingApi } from "./publishing";
+export { schedulerAnalyticsApi } from "./scheduler-analytics";
 
 export type {
 	LoginCredentials,
@@ -46,3 +47,10 @@ export type {
 	YouTubePublishRequestDto,
 	YouTubePublishResponseDto,
 } from "@/lib/validations/publishing";
+
+export type {
+	CreatorAnalyticsSummary,
+	Platform,
+	PostMetrics,
+	ScheduleRequest,
+} from "@/lib/validations/scheduler-analytics";
