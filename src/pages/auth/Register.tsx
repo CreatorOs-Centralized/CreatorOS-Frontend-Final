@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Zap, AlertCircle } from "lucide-react";
 import { registerDataSchema } from "@/lib/validations/auth";
+import { env } from "@/lib/env";
+import { startGoogleOAuth } from "@/lib/auth/google-oauth";
 
 const Register = () => {
   const [username, setUsername] = useState("");
@@ -40,12 +42,32 @@ const Register = () => {
     const result = await register(username, email, password);
 
     if (result.success) {
-      navigate("/verify-email", { state: { email } });
+      if (result.emailVerified) {
+        navigate("/login", { state: { email } });
+      } else {
+        navigate("/verify-email", { state: { email } });
+      }
     } else {
       setError(result.error || "Registration failed");
     }
 
     setLoading(false);
+  };
+
+  const handleGoogle = async () => {
+    setError("");
+    try {
+      const clientId = env.VITE_GOOGLE_CLIENT_ID;
+      if (!clientId) {
+        setError("Google sign up is not configured.");
+        return;
+      }
+      await startGoogleOAuth(clientId);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Google sign up failed";
+      setError(message);
+    }
   };
 
   return (
@@ -55,8 +77,12 @@ const Register = () => {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
             <Zap className="w-4 h-4" /> CreatorOS
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">Create your account</h1>
-          <p className="text-muted-foreground">Start managing your content like a pro</p>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Create your account
+          </h1>
+          <p className="text-muted-foreground">
+            Start managing your content like a pro
+          </p>
         </div>
 
         {error && (
@@ -66,8 +92,10 @@ const Register = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4 glass rounded-xl p-6">
-
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-4 glass rounded-xl p-6"
+        >
           <div className="space-y-2">
             <Label htmlFor="username">Username</Label>
             <Input
@@ -75,7 +103,7 @@ const Register = () => {
               type="text"
               placeholder="yourusername"
               value={username}
-              onChange={e => setUsername(e.target.value)}
+              onChange={(e) => setUsername(e.target.value)}
               required
               disabled={loading}
             />
@@ -88,7 +116,7 @@ const Register = () => {
               type="email"
               placeholder="you@example.com"
               value={email}
-              onChange={e => setEmail(e.target.value)}
+              onChange={(e) => setEmail(e.target.value)}
               required
               disabled={loading}
             />
@@ -101,7 +129,7 @@ const Register = () => {
                 id="password"
                 type={showPass ? "text" : "password"}
                 value={password}
-                onChange={e => setPassword(e.target.value)}
+                onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={loading}
               />
@@ -110,7 +138,11 @@ const Register = () => {
                 onClick={() => setShowPass(!showPass)}
                 className="absolute right-3 top-1/2 -translate-y-1/2"
               >
-                {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showPass ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
               </button>
             </div>
           </div>
@@ -121,7 +153,7 @@ const Register = () => {
               id="confirm"
               type="password"
               value={confirmPassword}
-              onChange={e => setConfirmPassword(e.target.value)}
+              onChange={(e) => setConfirmPassword(e.target.value)}
               required
               disabled={loading}
             />
@@ -134,6 +166,18 @@ const Register = () => {
           >
             {loading ? "Creating account..." : "Create Account"}
           </Button>
+
+          {env.VITE_GOOGLE_CLIENT_ID && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={loading}
+              onClick={handleGoogle}
+            >
+              Continue with Google
+            </Button>
+          )}
         </form>
 
         <p className="text-center text-sm text-muted-foreground">

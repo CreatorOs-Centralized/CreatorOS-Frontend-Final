@@ -12,14 +12,14 @@ const VerifyEmail = () => {
   const [error, setError] = useState("");
   const [resendDisabled, setResendDisabled] = useState(false);
   const [countdown, setCountdown] = useState(0);
-  
+
   const email = location.state?.email || user?.email || "your email";
 
   // Check for verification token in URL
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const token = params.get('token');
-    
+    const token = params.get("token");
+
     if (token) {
       handleVerify(token);
     }
@@ -28,15 +28,18 @@ const VerifyEmail = () => {
   const handleVerify = async (token: string) => {
     setVerifying(true);
     setError("");
-    
+
     const result = await verifyEmail(token);
-    
+
     if (result.success) {
       // If user is logged in already, send them to the correct next step.
       // If not logged in (common case), send them to login first.
       setTimeout(() => {
         if (isAuthenticated) {
-          navigate(user?.isProfileComplete ? "/dashboard" : "/complete-profile", { replace: true });
+          navigate(
+            user?.isProfileComplete ? "/dashboard" : "/complete-profile",
+            { replace: true },
+          );
         } else {
           navigate("/login", { replace: true, state: { email } });
         }
@@ -44,7 +47,7 @@ const VerifyEmail = () => {
     } else {
       setError(result.error || "Verification failed");
     }
-    
+
     setVerifying(false);
   };
 
@@ -52,7 +55,7 @@ const VerifyEmail = () => {
     // Implement resend verification email
     setResendDisabled(true);
     setCountdown(60);
-    
+
     // Countdown timer
     const timer = setInterval(() => {
       setCountdown((prev) => {
@@ -64,7 +67,7 @@ const VerifyEmail = () => {
         return prev - 1;
       });
     }, 1000);
-    
+
     // TODO: Call API to resend verification email
     // await authApi.resendVerification(email);
   };
@@ -82,7 +85,9 @@ const VerifyEmail = () => {
               <CheckCircle className="w-10 h-10 text-green-500" />
             </div>
             <h1 className="text-2xl font-bold">Verifying Email...</h1>
-            <p className="text-muted-foreground">Please wait while we verify your email.</p>
+            <p className="text-muted-foreground">
+              Please wait while we verify your email.
+            </p>
           </div>
         </div>
       </div>
@@ -104,7 +109,11 @@ const VerifyEmail = () => {
               </div>
               <h1 className="text-2xl font-bold">Verification Failed</h1>
               <p className="text-muted-foreground">{error}</p>
-              <Button variant="outline" onClick={() => navigate("/register")} className="w-full">
+              <Button
+                variant="outline"
+                onClick={() => navigate("/register")}
+                className="w-full"
+              >
                 Try Again
               </Button>
             </>
@@ -115,22 +124,26 @@ const VerifyEmail = () => {
               </div>
               <h1 className="text-2xl font-bold">Verify your email</h1>
               <p className="text-muted-foreground">
-                We've sent a verification link to <span className="text-foreground font-medium">{email}</span>
+                We've sent a verification link to{" "}
+                <span className="text-foreground font-medium">{email}</span>
               </p>
               <p className="text-sm text-muted-foreground">
-                Click the link in the email to verify your account and complete your profile setup.
+                Click the link in the email to verify your account and complete
+                your profile setup.
               </p>
-              
+
               <div className="pt-4 space-y-3">
-                <Button 
-                  variant="outline" 
-                  onClick={handleResend} 
+                <Button
+                  variant="outline"
+                  onClick={handleResend}
                   disabled={resendDisabled}
                   className="w-full"
                 >
-                  {resendDisabled ? `Resend available in ${countdown}s` : "Resend verification email"}
+                  {resendDisabled
+                    ? `Resend available in ${countdown}s`
+                    : "Resend verification email"}
                 </Button>
-                
+
                 <Link to="/login">
                   <Button variant="ghost" className="w-full">
                     Back to login

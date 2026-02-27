@@ -9,6 +9,7 @@ export const env = createEnv({
       .url()
       .default("https://creatoros-api.adharbattulwar.com"),
     VITE_PUBLISHING_BASE_PATH: z.string().default("/publishing"),
+    VITE_GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   },
   runtimeEnv: import.meta.env,
   emptyStringAsUndefined: true,

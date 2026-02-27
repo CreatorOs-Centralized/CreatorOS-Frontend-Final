@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Zap, AlertCircle } from "lucide-react";
 import { loginCredentialsSchema } from "@/lib/validations/auth";
+import { env } from "@/lib/env";
+import { startGoogleOAuth } from "@/lib/auth/google-oauth";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -20,7 +22,8 @@ const Login = () => {
   useEffect(() => {
     const state = location.state as { email?: unknown } | null;
     const stateEmail = state?.email;
-    if (typeof stateEmail === "string" && stateEmail.trim() && !email) setEmail(stateEmail);
+    if (typeof stateEmail === "string" && stateEmail.trim() && !email)
+      setEmail(stateEmail);
   }, [location.state, email]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,16 +38,32 @@ const Login = () => {
     }
 
     setLoading(true);
-    
+
     const result = await login(email, password);
-    
+
     if (result.success) {
       navigate(result.nextRoute || "/dashboard", { replace: true });
     } else {
       setError(result.error || "Login failed");
     }
-    
+
     setLoading(false);
+  };
+
+  const handleGoogle = async () => {
+    setError("");
+    try {
+      const clientId = env.VITE_GOOGLE_CLIENT_ID;
+      if (!clientId) {
+        setError("Google login is not configured.");
+        return;
+      }
+      await startGoogleOAuth(clientId);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Google login failed";
+      setError(message);
+    }
   };
 
   return (
@@ -55,7 +74,9 @@ const Login = () => {
             <Zap className="w-4 h-4" /> CreatorOS
           </div>
           <h1 className="text-3xl font-bold tracking-tight">Welcome back</h1>
-          <p className="text-muted-foreground">Sign in to your creator dashboard</p>
+          <p className="text-muted-foreground">
+            Sign in to your creator dashboard
+          </p>
         </div>
 
         {error && (
@@ -65,56 +86,85 @@ const Login = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4 glass rounded-xl p-6">
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-4 glass rounded-xl p-6"
+        >
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input 
-              id="email" 
-              type="email" 
-              placeholder="you@example.com" 
-              value={email} 
-              onChange={e => setEmail(e.target.value)} 
-              required 
+            <Input
+              id="email"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
               disabled={loading}
             />
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
             <div className="relative">
-              <Input 
-                id="password" 
-                type={showPass ? "text" : "password"} 
-                placeholder="••••••••" 
-                value={password} 
-                onChange={e => setPassword(e.target.value)} 
-                required 
+              <Input
+                id="password"
+                type={showPass ? "text" : "password"}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
                 disabled={loading}
               />
-              <button 
-                type="button" 
-                onClick={() => setShowPass(!showPass)} 
+              <button
+                type="button"
+                onClick={() => setShowPass(!showPass)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 disabled={loading}
               >
-                {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showPass ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
               </button>
             </div>
           </div>
-          
+
           <div className="flex justify-end">
-            <Link to="/forgot-password" className="text-sm text-primary hover:underline">
+            <Link
+              to="/forgot-password"
+              className="text-sm text-primary hover:underline"
+            >
               Forgot password?
             </Link>
           </div>
-          
-          <Button type="submit" className="w-full gradient-primary border-0" disabled={loading}>
+
+          <Button
+            type="submit"
+            className="w-full gradient-primary border-0"
+            disabled={loading}
+          >
             {loading ? "Signing in..." : "Sign In"}
           </Button>
+
+          {env.VITE_GOOGLE_CLIENT_ID && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={loading}
+              onClick={handleGoogle}
+            >
+              Continue with Google
+            </Button>
+          )}
         </form>
 
         <p className="text-center text-sm text-muted-foreground">
-          Don't have an account? <Link to="/register" className="text-primary hover:underline">Sign up</Link>
+          Don't have an account?{" "}
+          <Link to="/register" className="text-primary hover:underline">
+            Sign up
+          </Link>
         </p>
       </div>
     </div>

@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams, useParams } from "react-router-dom";
+import { useSearchParams, useParams, useNavigate } from "react-router-dom";
 
 import { env } from "@/lib/env";
 import { useAuthStore } from "@/stores/auth-store";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  buildGoogleRedirectUri,
+  GOOGLE_CODE_VERIFIER_KEY,
+} from "@/lib/auth/google-oauth";
 
 type CallbackState = {
   title: string;
@@ -31,17 +36,23 @@ const decodeJwtUserId = (token: string): string | null => {
       uid?: unknown;
     };
 
-    if (typeof payload.userId === "string" && payload.userId.trim()) return payload.userId;
-    if (typeof payload.user_id === "string" && payload.user_id.trim()) return payload.user_id;
-    if (typeof payload.uid === "string" && payload.uid.trim()) return payload.uid;
-    if (typeof payload.sub === "string" && payload.sub.trim()) return payload.sub;
+    if (typeof payload.userId === "string" && payload.userId.trim())
+      return payload.userId;
+    if (typeof payload.user_id === "string" && payload.user_id.trim())
+      return payload.user_id;
+    if (typeof payload.uid === "string" && payload.uid.trim())
+      return payload.uid;
+    if (typeof payload.sub === "string" && payload.sub.trim())
+      return payload.sub;
     return null;
   } catch {
     return null;
   }
 };
 
-const resolveUserIdForLinkedInCallback = async (token: string): Promise<string | null> => {
+const resolveUserIdForLinkedInCallback = async (
+  token: string,
+): Promise<string | null> => {
   const cachedUserId = useAuthStore.getState().user?.id;
   if (cachedUserId) return cachedUserId;
 
@@ -67,6 +78,8 @@ const resolveUserIdForLinkedInCallback = async (token: string): Promise<string |
 const OAuthCallback = () => {
   const [searchParams] = useSearchParams();
   const { provider: providerParam } = useParams();
+  const navigate = useNavigate();
+  const { loginWithGoogle } = useAuth();
 
   const provider = useMemo<Provider | null>(() => {
     if (!isProvider(providerParam)) return null;
@@ -80,7 +93,11 @@ const OAuthCallback = () => {
   });
 
   useEffect(() => {
-    const notify = (payload: { type: string; provider: string; message?: string }) => {
+    const notify = (payload: {
+      type: string;
+      provider: string;
+      message?: string;
+    }) => {
       if (window.opener && !window.opener.closed) {
         window.opener.postMessage(payload, window.location.origin);
       }
@@ -98,6 +115,27 @@ const OAuthCallback = () => {
 
         if (oauthError) throw new Error(oauthError);
         if (!code) throw new Error("Missing authorization code.");
+
+        if (provider === "google") {
+          const redirectUri = buildGoogleRedirectUri();
+          const verifier =
+            sessionStorage.getItem(GOOGLE_CODE_VERIFIER_KEY) || undefined;
+          sessionStorage.removeItem(GOOGLE_CODE_VERIFIER_KEY);
+
+          const result = await loginWithGoogle(code, redirectUri, verifier);
+          if (!result.success) {
+            throw new Error(result.error || "Google login failed");
+          }
+
+          setState({
+            title: "Signed in",
+            message: "Redirecting...",
+            status: "success",
+          });
+
+          navigate(result.nextRoute || "/dashboard", { replace: true });
+          return;
+        }
 
         const token = localStorage.getItem("accessToken");
         if (!token) throw new Error("Missing access token in local storage.");
@@ -139,7 +177,8 @@ const OAuthCallback = () => {
         notify({ type: "creatoros-oauth-success", provider });
         setTimeout(() => window.close(), 1200);
       } catch (error) {
-        const message = error instanceof Error ? error.message : "OAuth connection failed.";
+        const message =
+          error instanceof Error ? error.message : "OAuth connection failed.";
         setState({
           title: "Connection failed",
           message,
@@ -155,13 +194,15 @@ const OAuthCallback = () => {
     };
 
     run();
-  }, [provider, searchParams]);
+  }, [provider, searchParams, loginWithGoogle, navigate]);
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 text-center space-y-3">
         <h1 className="text-xl font-semibold">{state.title}</h1>
-        <p className={`text-sm ${state.status === "error" ? "text-destructive" : "text-muted-foreground"}`}>
+        <p
+          className={`text-sm ${state.status === "error" ? "text-destructive" : "text-muted-foreground"}`}
+        >
           {state.message}
         </p>
       </div>

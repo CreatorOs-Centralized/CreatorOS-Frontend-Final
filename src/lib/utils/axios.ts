@@ -11,6 +11,7 @@ type RetriableConfig = InternalAxiosRequestConfig & {
 const AUTH_FREE_PATHS = [
   "/auth/login",
   "/auth/register",
+  "/auth/oauth/google",
   "/auth/refresh",
   "/auth/logout",
   "/auth/verify-email",
@@ -71,7 +72,12 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as RetriableConfig | undefined;
 
-    if (!originalRequest || error.response?.status !== 401 || originalRequest._retry || isAuthFreePath(originalRequest.url)) {
+    if (
+      !originalRequest ||
+      error.response?.status !== 401 ||
+      originalRequest._retry ||
+      isAuthFreePath(originalRequest.url)
+    ) {
       return Promise.reject(error);
     }
 

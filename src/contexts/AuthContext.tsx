@@ -1,26 +1,54 @@
-import React, { createContext, useContext, useEffect, useCallback } from 'react';
-import { authApi, profileApi, isProfileComplete, type UserDto, type LoginCredentials, type RegisterData } from '@/lib/api';
-import type { CreatorProfile } from '@/types';
-import { tokenStorage } from '@/lib/auth/tokens';
-import { useAuthStore } from '@/stores/auth-store';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useCallback,
+} from "react";
+import {
+  authApi,
+  profileApi,
+  isProfileComplete,
+  type UserDto,
+  type LoginCredentials,
+  type RegisterData,
+} from "@/lib/api";
+import type { CreatorProfile } from "@/types";
+import { tokenStorage } from "@/lib/auth/tokens";
+import { useAuthStore } from "@/stores/auth-store";
 
-const getProfileDataKey = (userId: string) => `creatoros.profile.data:${userId}`;
-
+const getProfileDataKey = (userId: string) =>
+  `creatoros.profile.data:${userId}`;
 interface AuthContextType {
   user: UserDto | null;
   profile: CreatorProfile | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; nextRoute?: string; error?: string }>;
-  register: (username: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  updateProfile: (profileData: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>;
+  login: (
+    email: string,
+    password: string,
+  ) => Promise<{ success: boolean; nextRoute?: string; error?: string }>;
+  loginWithGoogle: (
+    code: string,
+    redirectUri: string,
+    codeVerifier?: string,
+  ) => Promise<{ success: boolean; nextRoute?: string; error?: string }>;
+  register: (
+    username: string,
+    email: string,
+    password: string,
+  ) => Promise<{ success: boolean; emailVerified?: boolean; error?: string }>;
+  updateProfile: (
+    profileData: Record<string, unknown>,
+  ) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   verifyEmail: (token: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const user = useAuthStore((state) => state.user);
   const profile = useAuthStore((state) => state.profile);
   const isLoading = useAuthStore((state) => state.isLoading);
@@ -39,7 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object') {
+        if (parsed && typeof parsed === "object") {
           profileData = parsed as Record<string, unknown>;
         }
       } catch {
@@ -49,11 +77,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return {
       ...userData,
-      profileData
+      profileData,
     };
   }, []);
 
-  const applyProfileToUser = (userData: UserDto, loadedProfile: CreatorProfile | null): UserDto => {
+  const applyProfileToUser = (
+    userData: UserDto,
+    loadedProfile: CreatorProfile | null,
+  ): UserDto => {
     return {
       ...userData,
       isProfileComplete: isProfileComplete(loadedProfile),
@@ -61,7 +92,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const getNextRouteForUser = (userData: UserDto) => {
-    return userData.isProfileComplete ? '/dashboard' : '/complete-profile';
+    return userData.isProfileComplete ? "/dashboard" : "/complete-profile";
+  };
+
+  const finalizeLoginFromTokenResponse = async (response: {
+    accessToken: string;
+    refreshToken: string;
+  }) => {
+    setTokens({
+      accessToken: response.accessToken,
+      refreshToken: response.refreshToken,
+    });
+
+    const [rawUser, loadedProfile] = await Promise.all([
+      authApi.getCurrentUser(),
+      profileApi.getMyProfile(),
+    ]);
+
+    const hydrated = hydrateUser(rawUser);
+    const withProfile = applyProfileToUser(hydrated, loadedProfile);
+
+    setProfile(loadedProfile);
+    setUser(withProfile);
+
+    return {
+      success: true as const,
+      nextRoute: getNextRouteForUser(withProfile),
+    };
   };
 
   useEffect(() => {
@@ -95,39 +152,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const credentials: LoginCredentials = { email, password };
       const response = await authApi.login(credentials);
-
-      setTokens({ accessToken: response.accessToken, refreshToken: response.refreshToken });
-
-      const [rawUser, loadedProfile] = await Promise.all([
-        authApi.getCurrentUser(),
-        profileApi.getMyProfile(),
-      ]);
-
-      const hydrated = hydrateUser(rawUser);
-      const withProfile = applyProfileToUser(hydrated, loadedProfile);
-
-      setProfile(loadedProfile);
-      setUser(withProfile);
-
-      return { success: true, nextRoute: getNextRouteForUser(withProfile) };
+      return await finalizeLoginFromTokenResponse(response);
     } catch (error: unknown) {
       return {
         success: false,
-        error: authApi.getErrorMessage(error, 'Login failed')
+        error: authApi.getErrorMessage(error, "Login failed"),
       };
     }
   };
 
-  const register = async (username: string, email: string, password: string) => {
+  const loginWithGoogle = async (
+    code: string,
+    redirectUri: string,
+    codeVerifier?: string,
+  ) => {
     try {
-      const registerData: RegisterData = { username, email, password };
-      await authApi.register(registerData);
+      const response = await authApi.googleOauth({
+        code,
+        redirectUri,
+        codeVerifier: codeVerifier?.trim() ? codeVerifier : undefined,
+      });
 
-      return { success: true };
+      return await finalizeLoginFromTokenResponse(response);
     } catch (error: unknown) {
       return {
         success: false,
-        error: authApi.getErrorMessage(error, 'Registration failed')
+        error: authApi.getErrorMessage(error, "Google login failed"),
+      };
+    }
+  };
+
+  const register = async (
+    username: string,
+    email: string,
+    password: string,
+  ) => {
+    try {
+      const registerData: RegisterData = { username, email, password };
+      const response = await authApi.register(registerData);
+
+      return { success: true, emailVerified: response.emailVerified };
+    } catch (error: unknown) {
+      return {
+        success: false,
+        error: authApi.getErrorMessage(error, "Registration failed"),
       };
     }
   };
@@ -135,13 +203,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateProfile = async (profileData: Record<string, unknown>) => {
     try {
       if (!user?.id) {
-        return { success: false, error: 'Not authenticated' };
+        return { success: false, error: "Not authenticated" };
       }
 
       // Persist extra fields locally for prefill only.
-      localStorage.setItem(getProfileDataKey(user.id), JSON.stringify(profileData));
+      localStorage.setItem(
+        getProfileDataKey(user.id),
+        JSON.stringify(profileData),
+      );
 
-      const asString = (v: unknown) => (typeof v === 'string' ? v : '');
+      const asString = (v: unknown) => (typeof v === "string" ? v : "");
       const updatedProfile = await profileApi.upsertMyProfile({
         username: asString(profileData.username),
         display_name: asString(profileData.display_name),
@@ -151,7 +222,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         cover_photo_url: asString(profileData.cover_photo_url),
         location: asString(profileData.location),
         language: asString(profileData.language),
-        is_public: typeof profileData.is_public === 'boolean' ? profileData.is_public : true,
+        is_public:
+          typeof profileData.is_public === "boolean"
+            ? profileData.is_public
+            : true,
       });
 
       setProfile(updatedProfile);
@@ -165,7 +239,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return { success: true };
     } catch (error: unknown) {
-      return { success: false, error: authApi.getErrorMessage(error, 'Failed to update profile') };
+      return {
+        success: false,
+        error: authApi.getErrorMessage(error, "Failed to update profile"),
+      };
     }
   };
 
@@ -185,7 +262,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const verifyEmail = async (token: string) => {
     try {
       await authApi.verifyEmail(token);
-
       if (tokenStorage.getAccessToken()) {
         const [rawUser, loadedProfile] = await Promise.all([
           authApi.getCurrentUser(),
@@ -201,7 +277,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: unknown) {
       return {
         success: false,
-        error: authApi.getErrorMessage(error, 'Verification failed')
+        error: authApi.getErrorMessage(error, "Verification failed"),
       };
     }
   };
@@ -214,10 +290,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: !!user,
         isLoading,
         login,
+        loginWithGoogle,
         register,
         updateProfile,
         logout,
-        verifyEmail
+        verifyEmail,
       }}
     >
       {children}
@@ -228,7 +305,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
+    throw new Error("useAuth must be used within AuthProvider");
   }
   return context;
 };
