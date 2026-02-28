@@ -4,6 +4,7 @@ export { assetApi } from "./assets";
 export { contentApi } from "./content";
 export { publishingApi } from "./publishing";
 export { schedulerAnalyticsApi } from "./scheduler-analytics";
+export { analyticsApi } from "./analytics";
 
 export type {
 	LoginCredentials,
@@ -54,3 +55,10 @@ export type {
 	PostMetrics,
 	ScheduleRequest,
 } from "@/lib/validations/scheduler-analytics";
+
+export type {
+	DashboardPostItem,
+	DashboardSummaryResponse,
+	DashboardTrendItem,
+	PlatformComparisonItem,
+} from "@/lib/validations/analytics";
