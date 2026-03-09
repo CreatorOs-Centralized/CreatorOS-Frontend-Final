@@ -10,6 +10,8 @@ interface ImportMetaEnv {
   readonly VITE_KEYCLOAK_CLIENT_SECRET?: string;
   readonly VITE_API_GATEWAY_URL?: string;
   readonly VITE_PUBLISHING_BASE_PATH?: string;
+  readonly VITE_SCHEDULER_BASE_PATH?: string;
+  readonly VITE_ANALYTICS_BASE_PATH?: string;
 }
 
 interface ImportMeta {

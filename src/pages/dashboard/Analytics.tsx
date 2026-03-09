@@ -1,101 +1,220 @@
-import { mockAnalyticsSummary, mockViewsOverTime, mockEngagementByType } from "@/data/mockData";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, Legend } from "recharts";
-import { TrendingUp, Eye, Heart, MessageSquare, Share2 } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  AreaChart,
+  Area,
+  Legend,
+} from "recharts";
+import {
+  TrendingUp,
+  Eye,
+  Heart,
+  MessageSquare,
+  Share2,
+  Filter,
+} from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { contentApi, type ContentResponseDto } from "@/lib/api";
+
+const PLATFORMS = ["youtube", "instagram", "linkedin"] as const;
+
+type AnalyticsItem = {
+  postId: string;
+  platform: (typeof PLATFORMS)[number];
+  date: string;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+};
 
 const Analytics = () => {
-  const platformData = mockAnalyticsSummary.map(p => ({
-    name: p.platform,
-    views: p.total_views,
-    likes: p.total_likes,
-    comments: p.total_comments,
-    shares: p.total_shares,
-  }));
+  const [posts, setPosts] = useState<ContentResponseDto[]>([]);
+  const [analytics, setAnalytics] = useState<AnalyticsItem[]>([]);
 
-  const tooltipStyle = { backgroundColor: "hsl(240, 6%, 6%)", border: "1px solid hsl(240, 4%, 16%)", borderRadius: "8px", color: "hsl(0, 0%, 95%)" };
+  const [selectedPlatform, setSelectedPlatform] =
+    useState<(typeof PLATFORMS)[number]>("youtube");
+  const [selectedPost, setSelectedPost] = useState<string>("");
+
+  /* ---------------- LOAD POSTS ---------------- */
+  useEffect(() => {
+    const load = async () => {
+      const data = await contentApi.getMyContents();
+      setPosts(data.filter((p) => p.workflowState === "PUBLISHED"));
+    };
+    load();
+  }, []);
+
+  /* ---------------- FILTER POSTS BY PLATFORM ---------------- */
+  const platformPosts = useMemo(() => {
+    return posts.filter(
+      (p) => p.platform?.toLowerCase() === selectedPlatform
+    );
+  }, [posts, selectedPlatform]);
+
+  useEffect(() => {
+    setSelectedPost("");
+  }, [selectedPlatform]);
+
+  /* ---------------- FILTER ANALYTICS ---------------- */
+  const filteredAnalytics = useMemo(() => {
+    let data = analytics.filter(
+      (a) => a.platform === selectedPlatform
+    );
+    if (selectedPost) {
+      data = data.filter((a) => a.postId === selectedPost);
+    }
+    return data;
+  }, [analytics, selectedPlatform, selectedPost]);
+
+  /* ---------------- TOTALS ---------------- */
+  const totals = useMemo(() => {
+    return {
+      views: filteredAnalytics.reduce((s, i) => s + i.views, 0),
+      likes: filteredAnalytics.reduce((s, i) => s + i.likes, 0),
+      comments: filteredAnalytics.reduce((s, i) => s + i.comments, 0),
+      shares: filteredAnalytics.reduce((s, i) => s + i.shares, 0),
+    };
+  }, [filteredAnalytics]);
+
+  /* ---------------- VIEWS TREND ---------------- */
+  const viewsTrendData = useMemo(() => {
+    return filteredAnalytics.map((a) => ({
+      date: a.date,
+      views: a.views,
+    }));
+  }, [filteredAnalytics]);
+
+  /* ---------------- PLATFORM COMPARISON ---------------- */
+  const platformComparison = useMemo(() => {
+    return PLATFORMS.map((platform) => {
+      const data = analytics.filter((a) => a.platform === platform);
+      return {
+        name: platform,
+        views: data.reduce((s, i) => s + i.views, 0),
+        likes: data.reduce((s, i) => s + i.likes, 0),
+        comments: data.reduce((s, i) => s + i.comments, 0),
+        shares: data.reduce((s, i) => s + i.shares, 0),
+      };
+    });
+  }, [analytics]);
+
+  const tooltipStyle = {
+    backgroundColor: "hsl(240, 6%, 6%)",
+    border: "1px solid hsl(240, 4%, 16%)",
+    borderRadius: "8px",
+    color: "hsl(0, 0%, 95%)",
+  };
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Analytics</h1>
-        <p className="text-muted-foreground text-sm">Track your content performance across platforms</p>
+        <p className="text-muted-foreground text-sm">
+          Track your content performance
+        </p>
       </div>
 
+      {/* FILTERS */}
+      <Card className="p-4 bg-card border-border">
+        <div className="flex items-center gap-4 flex-wrap">
+          <Filter className="w-4 h-4 text-muted-foreground" />
+
+          <Select value={selectedPlatform} onValueChange={(v) => setSelectedPlatform(v as any)}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Platform" />
+            </SelectTrigger>
+            <SelectContent>
+              {PLATFORMS.map((p) => (
+                <SelectItem key={p} value={p}>
+                  {p.charAt(0).toUpperCase() + p.slice(1)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={selectedPost} onValueChange={setSelectedPost}>
+            <SelectTrigger className="w-[260px]">
+              <SelectValue placeholder="Post" />
+            </SelectTrigger>
+            <SelectContent>
+              {platformPosts.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.title.length > 35
+                    ? p.title.slice(0, 35) + "..."
+                    : p.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </Card>
+
+      {/* SUMMARY */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total Views", value: "74.1K", icon: Eye, color: "text-primary" },
-          { label: "Total Likes", value: "9K", icon: Heart, color: "text-pink-500" },
-          { label: "Comments", value: "730", icon: MessageSquare, color: "text-blue-400" },
-          { label: "Shares", value: "630", icon: Share2, color: "text-green-400" },
-        ].map(s => (
+          { label: "Views", value: totals.views, icon: Eye },
+          { label: "Likes", value: totals.likes, icon: Heart },
+          { label: "Comments", value: totals.comments, icon: MessageSquare },
+          { label: "Shares", value: totals.shares, icon: Share2 },
+        ].map((s) => (
           <Card key={s.label} className="p-4 bg-card border-border">
-            <div className="flex items-center gap-2 mb-2">
-              <s.icon className={`w-4 h-4 ${s.color}`} />
-              <span className="text-xs text-muted-foreground">{s.label}</span>
-            </div>
+            <s.icon className="w-4 h-4 mb-1" />
             <p className="text-xl font-bold">{s.value}</p>
+            <p className="text-xs text-muted-foreground">{s.label}</p>
           </Card>
         ))}
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <Card className="p-6 bg-card border-border">
-          <h2 className="font-semibold mb-4 flex items-center gap-2"><TrendingUp className="w-4 h-4 text-primary" /> Views Trend</h2>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={mockViewsOverTime}>
-                <defs>
-                  <linearGradient id="ayt" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(263, 70%, 58%)" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="hsl(263, 70%, 58%)" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="aig" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(340, 75%, 55%)" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="hsl(340, 75%, 55%)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="date" stroke="hsl(240, 5%, 55%)" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="hsl(240, 5%, 55%)" fontSize={12} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Area type="monotone" dataKey="youtube" stroke="hsl(263, 70%, 58%)" fill="url(#ayt)" strokeWidth={2} />
-                <Area type="monotone" dataKey="instagram" stroke="hsl(340, 75%, 55%)" fill="url(#aig)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
+      {/* VIEWS TREND */}
+      <Card className="p-6 bg-card border-border">
+        <h2 className="font-semibold mb-4 flex items-center gap-2">
+          <TrendingUp className="w-4 h-4" /> Views Trend
+        </h2>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={viewsTrendData}>
+              <XAxis dataKey="date" />
+              <YAxis />
+              <Tooltip contentStyle={tooltipStyle} />
+              <Area dataKey="views" stroke="hsl(263,70%,58%)" fillOpacity={0.3} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
 
-        <Card className="p-6 bg-card border-border">
-          <h2 className="font-semibold mb-4">Engagement Breakdown</h2>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={mockEngagementByType} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={90} strokeWidth={0}>
-                  {mockEngagementByType.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                </Pie>
-                <Tooltip contentStyle={tooltipStyle} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        <Card className="p-6 bg-card border-border lg:col-span-2">
-          <h2 className="font-semibold mb-4">Platform Comparison</h2>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={platformData}>
-                <XAxis dataKey="name" stroke="hsl(240, 5%, 55%)" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="hsl(240, 5%, 55%)" fontSize={12} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Bar dataKey="views" fill="hsl(263, 70%, 58%)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="likes" fill="hsl(340, 75%, 55%)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="comments" fill="hsl(195, 75%, 55%)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="shares" fill="hsl(142, 71%, 45%)" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      </div>
+      {/* PLATFORM COMPARISON */}
+      <Card className="p-6 bg-card border-border">
+        <h2 className="font-semibold mb-4">Platform Comparison</h2>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={platformComparison}>
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip contentStyle={tooltipStyle} />
+              <Bar dataKey="views" fill="hsl(263,70%,58%)" />
+              <Bar dataKey="likes" fill="hsl(340,75%,55%)" />
+              <Bar dataKey="comments" fill="hsl(195,75%,55%)" />
+              <Bar dataKey="shares" fill="hsl(142,71%,45%)" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
     </div>
   );
 };

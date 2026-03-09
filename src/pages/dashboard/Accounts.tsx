@@ -32,7 +32,10 @@ const Accounts = () => {
       const data = await publishingApi.getConnectedAccounts();
       setAccounts(data);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load connected accounts.";
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to load connected accounts.";
       setError(message);
     } finally {
       setIsLoading(false);
@@ -68,7 +71,11 @@ const Accounts = () => {
     setError(null);
 
     try {
-      localStorage.setItem("creatoros_api_gateway_url", env.VITE_API_GATEWAY_URL);
+      localStorage.setItem(
+        "creatoros_api_gateway_url",
+        env.VITE_API_GATEWAY_URL
+      );
+
       const url =
         platform === "youtube"
           ? await publishingApi.getYouTubeLoginUrl()
@@ -79,7 +86,12 @@ const Accounts = () => {
       const fallbackCallback = `${window.location.origin}/auth/${platform}/callback?provider=${platform}`;
       const popupUrl = url || fallbackCallback;
 
-      const popup = window.open(popupUrl, `creatoros-${platform}-oauth`, "width=560,height=720");
+      const popup = window.open(
+        popupUrl,
+        `creatoros-${platform}-oauth`,
+        "width=560,height=720"
+      );
+
       if (!popup) {
         throw new Error("Popup blocked. Please allow popups and try again.");
       }
@@ -91,7 +103,10 @@ const Accounts = () => {
         }
       }, 500);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to start OAuth flow.";
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to start OAuth flow.";
       setError(message);
       setConnectingPlatform(null);
     }
@@ -102,7 +117,9 @@ const Accounts = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Connected Accounts</h1>
-          <p className="text-muted-foreground text-sm">Manage your social media connections</p>
+          <p className="text-muted-foreground text-sm">
+            Manage your social media connections
+          </p>
         </div>
 
         <div className="flex gap-2">
@@ -118,10 +135,16 @@ const Accounts = () => {
         </div>
       </div>
 
-      {error && <Card className="p-3 bg-destructive/10 border-destructive/20 text-sm text-destructive">{error}</Card>}
+      {error && (
+        <Card className="p-3 bg-destructive/10 border-destructive/20 text-sm text-destructive">
+          {error}
+        </Card>
+      )}
 
       {isLoading ? (
-        <Card className="p-6 bg-card border-border text-sm text-muted-foreground">Loading connected accounts...</Card>
+        <Card className="p-6 bg-card border-border text-sm text-muted-foreground">
+          Loading connected accounts...
+        </Card>
       ) : accounts.length === 0 ? (
         <Card className="p-12 bg-card border-border">
           <div className="flex flex-col items-center justify-center text-center space-y-4">
@@ -146,22 +169,34 @@ const Accounts = () => {
           {accounts.map(a => {
             const platformLabel = platformLabels[a.platform] || a.platform;
             const Icon = platformIcons[platformLabel] || Link2;
+
             return (
               <Card key={a.id} className="p-5 bg-card border-border">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg bg-secondary flex items-center justify-center ${platformColors[platformLabel] || ''}`}>
+                    <div
+                      className={`w-10 h-10 rounded-lg bg-secondary flex items-center justify-center ${
+                        platformColors[platformLabel] || ""
+                      }`}
+                    >
                       <Icon className="w-5 h-5" />
                     </div>
                     <div>
                       <p className="font-medium">{platformLabel}</p>
-                      <p className="text-xs text-muted-foreground">{a.accountName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {a.accountName}
+                      </p>
                     </div>
                   </div>
-                  {a.isActive ? <CheckCircle className="w-5 h-5 text-green-400" /> : <XCircle className="w-5 h-5 text-muted-foreground" />}
+                  {a.isActive ? (
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                  ) : (
+                    <XCircle className="w-5 h-5 text-muted-foreground" />
+                  )}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {a.accountType || "account"} • {a.isActive ? "active" : "inactive"}
+                  {a.accountType || "account"} •{" "}
+                  {a.isActive ? "active" : "inactive"}
                 </div>
               </Card>
             );
