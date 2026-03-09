@@ -1,18 +1,29 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Youtube, Linkedin, CheckCircle, XCircle, Link2, RefreshCw } from "lucide-react";
+import { Youtube, Linkedin, Instagram, CheckCircle, XCircle, Link2, RefreshCw } from "lucide-react";
 import { env } from "@/lib/env";
 import { publishingApi, type ConnectedAccountDto } from "@/lib/api";
 
-const platformIcons: Record<string, any> = { YouTube: Youtube, LinkedIn: Linkedin };
-const platformColors: Record<string, string> = { YouTube: "text-red-500", LinkedIn: "text-blue-600" };
+const platformIcons: Record<string, any> = { YouTube: Youtube, LinkedIn: Linkedin, Instagram };
+const platformColors: Record<string, string> = {
+  YouTube: "text-red-500",
+  LinkedIn: "text-blue-600",
+  Instagram: "text-pink-500",
+};
+const platformLabels: Record<string, string> = {
+  YOUTUBE: "YouTube",
+  LINKEDIN: "LinkedIn",
+  INSTAGRAM: "Instagram",
+};
+
+type ConnectPlatform = "youtube" | "linkedin" | "instagram";
 
 const Accounts = () => {
   const [accounts, setAccounts] = useState<ConnectedAccountDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [connectingPlatform, setConnectingPlatform] = useState<"youtube" | "linkedin" | null>(null);
+  const [connectingPlatform, setConnectingPlatform] = useState<ConnectPlatform | null>(null);
 
   const loadAccounts = useCallback(async () => {
     setIsLoading(true);
@@ -52,7 +63,7 @@ const Accounts = () => {
     return () => window.removeEventListener("message", onMessage);
   }, [loadAccounts]);
 
-  const handleConnect = async (platform: "youtube" | "linkedin") => {
+  const handleConnect = async (platform: ConnectPlatform) => {
     setConnectingPlatform(platform);
     setError(null);
 
@@ -61,7 +72,9 @@ const Accounts = () => {
       const url =
         platform === "youtube"
           ? await publishingApi.getYouTubeLoginUrl()
-          : await publishingApi.getLinkedInLoginUrl();
+          : platform === "linkedin"
+            ? await publishingApi.getLinkedInLoginUrl()
+            : await publishingApi.getInstagramLoginUrl();
 
       const fallbackCallback = `${window.location.origin}/auth/${platform}/callback?provider=${platform}`;
       const popupUrl = url || fallbackCallback;
@@ -99,6 +112,9 @@ const Accounts = () => {
           <Button variant="outline" onClick={() => handleConnect("linkedin")} disabled={!!connectingPlatform}>
             {connectingPlatform === "linkedin" ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Linkedin className="w-4 h-4 mr-2" />} Connect LinkedIn
           </Button>
+          <Button variant="outline" onClick={() => handleConnect("instagram")} disabled={!!connectingPlatform}>
+            {connectingPlatform === "instagram" ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Instagram className="w-4 h-4 mr-2" />} Connect Instagram
+          </Button>
         </div>
       </div>
 
@@ -115,19 +131,20 @@ const Accounts = () => {
             <div>
               <h3 className="text-lg font-medium">No accounts connected</h3>
               <p className="text-sm text-muted-foreground max-w-sm mt-1">
-                Connect your YouTube or LinkedIn accounts to start managing your social media presence
+                Connect your YouTube, LinkedIn, or Instagram accounts to start managing your social media presence
               </p>
             </div>
             <div className="flex gap-2">
               <Button onClick={() => handleConnect("youtube")}>Connect YouTube</Button>
               <Button variant="outline" onClick={() => handleConnect("linkedin")}>Connect LinkedIn</Button>
+              <Button variant="outline" onClick={() => handleConnect("instagram")}>Connect Instagram</Button>
             </div>
           </div>
         </Card>
       ) : (
         <div className="grid sm:grid-cols-2 gap-4">
           {accounts.map(a => {
-            const platformLabel = a.platform === "YOUTUBE" ? "YouTube" : a.platform === "LINKEDIN" ? "LinkedIn" : a.platform;
+            const platformLabel = platformLabels[a.platform] || a.platform;
             const Icon = platformIcons[platformLabel] || Link2;
             return (
               <Card key={a.id} className="p-5 bg-card border-border">

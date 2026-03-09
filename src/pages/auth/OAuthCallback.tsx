@@ -10,7 +10,7 @@ type CallbackState = {
   status: "loading" | "success" | "error";
 };
 
-const PROVIDERS = ["youtube", "linkedin", "google"] as const;
+const PROVIDERS = ["youtube", "linkedin", "instagram", "google"] as const;
 type Provider = (typeof PROVIDERS)[number];
 
 const isProvider = (value: string | null): value is Provider => {
@@ -100,19 +100,27 @@ const OAuthCallback = () => {
         if (!code) throw new Error("Missing authorization code.");
 
         const token = localStorage.getItem("accessToken");
-        if (!token) throw new Error("Missing access token in local storage.");
+        if (provider !== "instagram" && !token) {
+          throw new Error("Missing access token in local storage.");
+        }
 
         const callbackUrl =
           provider === "youtube"
             ? `${env.VITE_API_GATEWAY_URL}/oauth/youtube/callback?code=${encodeURIComponent(code)}${stateParam ? `&state=${encodeURIComponent(stateParam)}` : ""}`
-            : `${env.VITE_API_GATEWAY_URL}/oauth/linkedin/callback?code=${encodeURIComponent(code)}`;
+            : provider === "linkedin"
+              ? `${env.VITE_API_GATEWAY_URL}/oauth/linkedin/callback?code=${encodeURIComponent(code)}`
+              : provider === "instagram"
+                ? `${env.VITE_API_GATEWAY_URL}/oauth/instagram/callback?code=${encodeURIComponent(code)}${stateParam ? `&state=${encodeURIComponent(stateParam)}` : ""}`
+                : `${env.VITE_API_GATEWAY_URL}/oauth/google/callback?code=${encodeURIComponent(code)}`;
 
-        const headers: HeadersInit = {
-          Authorization: `Bearer ${token}`,
-        };
+        const headers: HeadersInit = provider === "instagram"
+          ? {}
+          : {
+              Authorization: `Bearer ${token}`,
+            };
 
         if (provider === "linkedin") {
-          const userId = await resolveUserIdForLinkedInCallback(token);
+          const userId = await resolveUserIdForLinkedInCallback(token as string);
           if (!userId) {
             throw new Error("Missing user context for LinkedIn callback.");
           }
@@ -131,7 +139,7 @@ const OAuthCallback = () => {
         }
 
         setState({
-          title: `${provider === "youtube" ? "YouTube" : "LinkedIn"} connected`,
+          title: `${provider === "youtube" ? "YouTube" : provider === "linkedin" ? "LinkedIn" : provider === "instagram" ? "Instagram" : "Google"} connected`,
           message: "Account connected successfully. Closing window...",
           status: "success",
         });

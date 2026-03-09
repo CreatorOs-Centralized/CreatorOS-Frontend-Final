@@ -3,10 +3,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Send, Youtube, Linkedin, CheckCircle, Clock, AlertCircle } from "lucide-react";
-import { contentApi, publishingApi, type ContentResponseDto, type ConnectedAccountDto, type PublishedPostDto } from "@/lib/api";
+import { Send, Youtube, Linkedin, Instagram, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { assetApi, contentApi, publishingApi, type ContentResponseDto, type ConnectedAccountDto, type PublishedPostDto } from "@/lib/api";
 
-const platformIcons: Record<string, any> = { YouTube: Youtube, LinkedIn: Linkedin };
+const platformIcons: Record<string, any> = { YouTube: Youtube, LinkedIn: Linkedin, Instagram };
 
 const Publish = () => {
   const [selectedContent, setSelectedContent] = useState("");
@@ -27,6 +27,7 @@ const Publish = () => {
   const accountOptions = useMemo(() => {
     if (selectedPlatform === "YouTube") return accounts.filter((a) => a.platform === "YOUTUBE");
     if (selectedPlatform === "LinkedIn") return accounts.filter((a) => a.platform === "LINKEDIN");
+    if (selectedPlatform === "Instagram") return accounts.filter((a) => a.platform === "INSTAGRAM");
     return [];
   }, [accounts, selectedPlatform]);
 
@@ -75,9 +76,24 @@ const Publish = () => {
         if (!result.success) {
           throw new Error(result.error || "Failed to publish to YouTube.");
         }
-      } else {
+      } else if (selectedPlatform === "LinkedIn") {
         await publishingApi.publishLinkedInPost(selectedAccount, {
           text: `New content published: ${selectedContentItem.title}`,
+        });
+      } else {
+        const mediaId = localStorage.getItem(`content:${selectedContent}:mediaId`) || undefined;
+        if (!mediaId) {
+          throw new Error("Missing uploaded media for Instagram publish. Upload media in Content first.");
+        }
+
+        const isImageContent = selectedContentItem.contentType === "IMAGE";
+        const assetUrl = assetApi.getFileViewUrl(mediaId);
+
+        await publishingApi.publishInstagram({
+          accountId: selectedAccount,
+          caption: `New content published: ${selectedContentItem.title}`,
+          mediaType: isImageContent ? undefined : "REELS",
+          ...(isImageContent ? { imageUrl: assetUrl } : { videoUrl: assetUrl, thumbOffset: "1000" }),
         });
       }
 
@@ -103,7 +119,7 @@ const Publish = () => {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Publish</h1>
-        <p className="text-muted-foreground text-sm">Share your content to YouTube & LinkedIn</p>
+        <p className="text-muted-foreground text-sm">Share your content to YouTube, LinkedIn, and Instagram</p>
       </div>
 
       {error && <Card className="p-3 bg-destructive/10 border-destructive/20 text-sm text-destructive">{error}</Card>}
@@ -127,6 +143,7 @@ const Publish = () => {
               <SelectContent>
                 <SelectItem value="YouTube">YouTube</SelectItem>
                 <SelectItem value="LinkedIn">LinkedIn</SelectItem>
+                <SelectItem value="Instagram">Instagram</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -171,7 +188,7 @@ const Publish = () => {
         ) : (
           <div className="space-y-3">
             {posts.map(j => {
-              const platformLabel = j.platform === "YOUTUBE" ? "YouTube" : "LinkedIn";
+              const platformLabel = j.platform === "YOUTUBE" ? "YouTube" : j.platform === "LINKEDIN" ? "LinkedIn" : "Instagram";
               const Icon = platformIcons[platformLabel] || Send;
               return (
                 <Card key={j.id} className="p-4 bg-card border-border flex items-center justify-between">
