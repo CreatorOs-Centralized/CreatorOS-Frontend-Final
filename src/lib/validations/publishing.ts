@@ -10,6 +10,7 @@ export const connectedAccountSchema = z.object({
   platformAccountId: z.string().optional(),
   youtubeChannelId: z.string().optional(),
   linkedinAuthorUrn: z.string().optional(),
+  instagramUserId: z.string().optional(),
   isActive: z.boolean(),
   connectedAt: z.string().optional(),
   updatedAt: z.string().optional(),
@@ -17,7 +18,7 @@ export const connectedAccountSchema = z.object({
 
 export const publishedPostSchema = z.object({
   id: z.string().min(1),
-  platform: z.enum(["YOUTUBE", "LINKEDIN"]),
+  platform: z.enum(["YOUTUBE", "LINKEDIN", "INSTAGRAM"]),
   platformPostId: z.string().min(1),
   permalinkUrl: z.string().url().or(z.string().min(1)),
   logLevel: z.enum(["INFO", "WARN", "ERROR"]).nullish(),
@@ -57,6 +58,88 @@ export const linkedInPublishResponseSchema = z.object({
   createdAt: z.string().optional(),
 });
 
+export const instagramMediaTypeSchema = z.enum(["REELS", "STORIES", "CAROUSEL", "VIDEO"]);
+
+export const instagramPublishRequestSchema = z
+  .object({
+    accountId: z.string().min(1),
+    caption: z.string().max(2200).optional(),
+    mediaType: instagramMediaTypeSchema.optional(),
+    imageUrl: z.string().url().optional(),
+    videoUrl: z.string().url().optional(),
+    children: z.array(z.string().min(1)).optional(),
+    isCarouselItem: z.boolean().optional(),
+    thumbOffset: z.string().optional(),
+    altText: z.string().max(1000).optional(),
+  })
+  .refine((value) => !(value.imageUrl && value.videoUrl), {
+    message: "imageUrl and videoUrl are mutually exclusive for single-media posts",
+    path: ["imageUrl"],
+  });
+
+export const instagramPublishResultSchema = z.object({
+  containerId: z.string().optional(),
+  mediaId: z.string().optional(),
+  status: z.string().optional(),
+});
+
+export const instagramMediaSchema = z.object({
+  id: z.string().min(1),
+  caption: z.string().optional(),
+  media_type: z.string().optional(),
+  media_url: z.string().url().optional(),
+  permalink: z.string().url().optional(),
+  timestamp: z.string().optional(),
+  like_count: z.number().optional(),
+  comments_count: z.number().optional(),
+});
+
+export const instagramPostsResultSchema = z.object({
+  data: z.array(instagramMediaSchema).optional(),
+  paging: z
+    .object({
+      cursors: z
+        .object({
+          before: z.string().optional(),
+          after: z.string().optional(),
+        })
+        .optional(),
+      next: z.string().optional(),
+      previous: z.string().optional(),
+    })
+    .optional(),
+});
+
+export const instagramInsightValueSchema = z.object({
+  value: z.union([z.number(), z.string(), z.record(z.unknown())]).optional(),
+  end_time: z.string().optional(),
+});
+
+export const instagramInsightSchema = z.object({
+  name: z.string().min(1),
+  period: z.string().optional(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  values: z.array(instagramInsightValueSchema).optional(),
+});
+
+export const instagramInsightsResultSchema = z.object({
+  data: z.array(instagramInsightSchema).optional(),
+});
+
+export const instagramContainerStatusSchema = z.object({
+  id: z.string().optional(),
+  status: z.string().optional(),
+  statusCode: z.string().optional(),
+  errorMessage: z.string().optional(),
+});
+
+export const instagramPublishingLimitSchema = z.object({
+  config: z.record(z.unknown()).optional(),
+  quota_usage: z.number().optional(),
+  quotaUsage: z.number().optional(),
+});
+
 export const loginUrlSchema = z.string().min(1);
 
 export type ConnectedAccountDto = z.infer<typeof connectedAccountSchema>;
@@ -66,3 +149,12 @@ export type YouTubePublishRequestDto = z.infer<typeof youtubePublishRequestSchem
 export type YouTubePublishResponseDto = z.infer<typeof youtubePublishResponseSchema>;
 export type LinkedInPublishRequestDto = z.infer<typeof linkedInPublishRequestSchema>;
 export type LinkedInPublishResponseDto = z.infer<typeof linkedInPublishResponseSchema>;
+export type InstagramMediaType = z.infer<typeof instagramMediaTypeSchema>;
+export type InstagramPublishRequestDto = z.infer<typeof instagramPublishRequestSchema>;
+export type InstagramPublishResultDto = z.infer<typeof instagramPublishResultSchema>;
+export type InstagramMediaDto = z.infer<typeof instagramMediaSchema>;
+export type InstagramPostsResultDto = z.infer<typeof instagramPostsResultSchema>;
+export type InstagramInsightDto = z.infer<typeof instagramInsightSchema>;
+export type InstagramInsightsResultDto = z.infer<typeof instagramInsightsResultSchema>;
+export type InstagramContainerStatusDto = z.infer<typeof instagramContainerStatusSchema>;
+export type InstagramPublishingLimitDto = z.infer<typeof instagramPublishingLimitSchema>;

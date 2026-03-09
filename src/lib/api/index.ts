@@ -40,6 +40,15 @@ export type {
 
 export type {
 	ConnectedAccountDto,
+	InstagramContainerStatusDto,
+	InstagramInsightDto,
+	InstagramInsightsResultDto,
+	InstagramMediaDto,
+	InstagramMediaType,
+	InstagramPostsResultDto,
+	InstagramPublishRequestDto,
+	InstagramPublishResultDto,
+	InstagramPublishingLimitDto,
 	LinkedInPublishRequestDto,
 	LinkedInPublishResponseDto,
 	PublishedPostDto,
