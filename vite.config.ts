@@ -6,15 +6,29 @@ import { componentTagger } from "lovable-tagger";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const gatewayTarget = env.VITE_API_GATEWAY_URL || "http://localhost:8089";
+  const gatewayTarget =
+    env.VITE_API_GATEWAY_TARGET ||
+    env.VITE_API_GATEWAY_URL ||
+    "http://localhost:8089";
+  const allowedHosts = [
+    ...(env.VITE_ALLOWED_HOSTS
+      ? env.VITE_ALLOWED_HOSTS.split(",")
+          .map((h) => h.trim())
+          .filter(Boolean)
+      : []),
+    ".ngrok-free.dev",
+  ];
 
   return {
     server: {
       host: "::",
       port: 5173,
       allowedHosts: [
-        "unanimated-myah-authoritatively.ngrok-free.dev",
-        "creatoros.adharbattulwar.com",
+        ...new Set([
+          ...allowedHosts,
+          "unanimated-myah-authoritatively.ngrok-free.dev",
+          "creatoros.adharbattulwar.com",
+        ]),
       ],
       proxy: {
         // Dev-only proxy to avoid CORS when calling backend services.
@@ -35,7 +49,9 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
-    plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+    plugins: [react(), mode === "development" && componentTagger()].filter(
+      Boolean,
+    ),
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

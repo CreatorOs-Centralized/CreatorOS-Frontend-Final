@@ -28,6 +28,12 @@ export const passwordResetConfirmSchema = z.object({
   newPassword: z.string().min(8),
 });
 
+export const googleOAuthRequestSchema = z.object({
+  code: z.string().min(1),
+  redirectUri: z.string().url(),
+  codeVerifier: z.string().min(1).optional(),
+});
+
 export const authTokensResponseSchema = z.object({
   accessToken: z.string().min(1),
   accessTokenExpiresInSeconds: z.number().positive(),
@@ -64,6 +70,7 @@ export type LoginCredentials = z.infer<typeof loginCredentialsSchema>;
 export type RegisterData = z.infer<typeof registerDataSchema>;
 export type TokenResponse = z.infer<typeof authTokensResponseSchema>;
 export type RegisterResponse = z.infer<typeof registerResponseSchema>;
+export type GoogleOAuthRequest = z.infer<typeof googleOAuthRequestSchema>;
 export type UserDto = z.infer<typeof currentUserSchema> & {
   isProfileComplete?: boolean;
   profileData?: Record<string, unknown>;

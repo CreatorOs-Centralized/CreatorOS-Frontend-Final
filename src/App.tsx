@@ -34,7 +34,8 @@ const ProtectedRoute = ({
   const { user, isLoading } = useAuth();
   if (isLoading) return null;
   if (!user) return <Navigate to="/login" replace />;
-  if (requireProfileComplete && !user.isProfileComplete) return <Navigate to="/complete-profile" replace />;
+  if (requireProfileComplete && !user.isProfileComplete)
+    return <Navigate to="/complete-profile" replace />;
   return <>{children}</>;
 };
 
@@ -52,9 +53,26 @@ const App = () => (
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/auth/:provider/callback" element={<OAuthCallback />} />
-            <Route path="/complete-profile" element={<ProtectedRoute><CompleteProfile /></ProtectedRoute>} />
-            <Route path="/dashboard" element={<ProtectedRoute requireProfileComplete><DashboardLayout /></ProtectedRoute>}>
+            <Route
+              path="/auth/:provider/callback"
+              element={<OAuthCallback />}
+            />
+            <Route
+              path="/complete-profile"
+              element={
+                <ProtectedRoute>
+                  <CompleteProfile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute requireProfileComplete>
+                  <DashboardLayout />
+                </ProtectedRoute>
+              }
+            >
               <Route index element={<Dashboard />} />
               <Route path="content" element={<Content />} />
               <Route path="publish" element={<Publish />} />

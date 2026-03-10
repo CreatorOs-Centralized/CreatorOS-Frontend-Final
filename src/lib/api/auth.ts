@@ -9,11 +9,13 @@ import {
   passwordResetConfirmSchema,
   passwordResetRequestResponseSchema,
   passwordResetRequestSchema,
+  googleOAuthRequestSchema,
   refreshTokenRequestSchema,
   registerDataSchema,
   registerResponseSchema,
   verifyEmailRequestSchema,
   type LoginCredentials,
+  type GoogleOAuthRequest,
   type RegisterData,
   type RegisterResponse,
   type TokenResponse,
@@ -42,6 +44,12 @@ export const authApi = {
     return authTokensResponseSchema.parse(response.data);
   },
 
+  googleOauth: async (data: GoogleOAuthRequest): Promise<TokenResponse> => {
+    const payload = googleOAuthRequestSchema.parse(data);
+    const response = await apiClient.post("/auth/oauth/google", payload);
+    return authTokensResponseSchema.parse(response.data);
+  },
+
   register: async (data: RegisterData): Promise<RegisterResponse> => {
     const payload = registerDataSchema.parse(data);
     const response = await apiClient.post("/auth/register", payload);
@@ -64,14 +72,22 @@ export const authApi = {
     await apiClient.post("/auth/verify-email", payload);
   },
 
-  requestPasswordReset: async (email: string): Promise<{ resetToken: string | null }> => {
+  requestPasswordReset: async (
+    email: string,
+  ): Promise<{ resetToken: string | null }> => {
     const payload = passwordResetRequestSchema.parse({ email });
-    const response = await apiClient.post("/auth/password-reset/request", payload);
+    const response = await apiClient.post(
+      "/auth/password-reset/request",
+      payload,
+    );
     const parsed = passwordResetRequestResponseSchema.parse(response.data);
     return { resetToken: parsed.resetToken ?? null };
   },
 
-  confirmPasswordReset: async (token: string, newPassword: string): Promise<void> => {
+  confirmPasswordReset: async (
+    token: string,
+    newPassword: string,
+  ): Promise<void> => {
     const payload = passwordResetConfirmSchema.parse({ token, newPassword });
     await apiClient.post("/auth/password-reset/confirm", payload);
   },

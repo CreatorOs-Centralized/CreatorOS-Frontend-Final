@@ -6,20 +6,26 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { 
-  Zap, 
-  User, 
-  Globe, 
-  ArrowRight, 
-  Check, 
-  Calendar, 
-  MapPin, 
-  AtSign, 
-  FileText, 
+import {
+  Zap,
+  User,
+  Globe,
+  ArrowRight,
+  Check,
+  Calendar,
+  MapPin,
+  AtSign,
+  FileText,
   Upload,
-  AlertCircle
+  AlertCircle,
 } from "lucide-react";
 
 const steps = ["Basic Info", "About You", "Preferences"];
@@ -99,14 +105,17 @@ const CompleteProfile = () => {
       const toText = (value: unknown, fallback: string) =>
         typeof value === "string" ? value : fallback;
 
-      setForm(prev => ({
+      setForm((prev) => ({
         ...prev,
         username: toText(user.profileData.username, prev.username),
         display_name: toText(user.profileData.display_name, prev.display_name),
         fullName: toText(user.profileData.fullName, prev.fullName),
         bio: toText(user.profileData.bio, prev.bio),
         niche: toText(user.profileData.niche, prev.niche),
-        profile_photo_url: toText(user.profileData.profile_photo_url, prev.profile_photo_url),
+        profile_photo_url: toText(
+          user.profileData.profile_photo_url,
+          prev.profile_photo_url,
+        ),
         location: toText(user.profileData.location, prev.location),
         language: toText(user.profileData.language, prev.language),
         dateOfBirth: toText(user.profileData.dateOfBirth, prev.dateOfBirth),
@@ -142,8 +151,16 @@ const CompleteProfile = () => {
   ];
 
   const niches = [
-    "Tech", "Gaming", "Lifestyle", "Education", "Entertainment", 
-    "Fitness", "Music", "Art", "Food", "Travel"
+    "Tech",
+    "Gaming",
+    "Lifestyle",
+    "Education",
+    "Entertainment",
+    "Fitness",
+    "Music",
+    "Art",
+    "Food",
+    "Travel",
   ];
 
   const update = (key: string, value: string) => {
@@ -153,7 +170,9 @@ const CompleteProfile = () => {
 
   const ensureAssetFolder = async (folderName: string): Promise<string> => {
     const folders = await assetApi.getRootFolders();
-    const existing = folders.find((folder) => folder.name.toLowerCase() === folderName.toLowerCase());
+    const existing = folders.find(
+      (folder) => folder.name.toLowerCase() === folderName.toLowerCase(),
+    );
     if (existing) return existing.id;
 
     const created = await assetApi.createFolder({
@@ -172,9 +191,9 @@ const CompleteProfile = () => {
         setError("File size must be less than 5MB");
         return;
       }
-      
+
       // Validate file type
-      if (!file.type.startsWith('image/')) {
+      if (!file.type.startsWith("image/")) {
         setError("Please upload an image file");
         return;
       }
@@ -213,27 +232,32 @@ const CompleteProfile = () => {
       form.language,
       form.dateOfBirth,
     ];
-    
+
     // Count filled text fields
-    const filledFields = fields.filter(f => f?.trim() !== '').length;
-    
+    const filledFields = fields.filter((f) => f?.trim() !== "").length;
+
     // Check if avatar is present (either uploaded or has URL)
     const hasAvatar = avatar !== null || form.profile_photo_url?.trim() !== "";
-    
+
     // Total fields: 8 text fields + 1 avatar field = 9 total
     const totalFields = 9;
     const filledCount = filledFields + (hasAvatar ? 1 : 0);
-    
+
     // Calculate percentage and ensure it never exceeds 100
     return Math.min(Math.round((filledCount / totalFields) * 100), 100);
   })();
 
   const nextStep = () => {
     setError("");
-    
+
     // Validate current step before proceeding
     if (step === 0) {
-      if (!form.fullName || !form.display_name || !form.username || (!avatar && !form.profile_photo_url)) {
+      if (
+        !form.fullName ||
+        !form.display_name ||
+        !form.username ||
+        (!avatar && !form.profile_photo_url)
+      ) {
         setError("Please fill in all required fields in this section");
         return;
       }
@@ -267,7 +291,6 @@ const CompleteProfile = () => {
 
     try {
       let avatarUrl = form.profile_photo_url;
-
       if (avatar) {
         const profilePhotoFolderId = await ensureAssetFolder("profilephoto");
         const uploadedAsset = await assetApi.uploadFile({
@@ -290,7 +313,11 @@ const CompleteProfile = () => {
       navigate("/dashboard", { replace: true });
     } catch (err) {
       console.error("Failed to update profile:", err);
-      setError(err instanceof Error ? err.message : "Failed to update profile. Please try again.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to update profile. Please try again.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -303,8 +330,12 @@ const CompleteProfile = () => {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
             <Zap className="w-4 h-4" /> CreatorOS
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">Complete Your Profile</h1>
-          <p className="text-muted-foreground">All fields are required to unlock your dashboard</p>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Complete Your Profile
+          </h1>
+          <p className="text-muted-foreground">
+            All fields are required to unlock your dashboard
+          </p>
         </div>
 
         <div className="space-y-2">
@@ -317,22 +348,27 @@ const CompleteProfile = () => {
 
         <div className="flex gap-2 mb-4">
           {steps.map((s, i) => (
-            <button 
-              key={s} 
-              onClick={() => setStep(i)} 
-              disabled={i > step && completion < ((i + 1) * 33)}
+            <button
+              key={s}
+              onClick={() => setStep(i)}
+              disabled={i > step && completion < (i + 1) * 33}
               className={`flex-1 text-xs py-2 px-3 rounded-lg flex items-center gap-1.5 justify-center transition-colors ${
-                i === step 
-                  ? 'bg-primary text-primary-foreground' 
-                  : i < step 
-                    ? 'bg-primary/20 text-primary' 
-                    : 'bg-secondary text-muted-foreground cursor-not-allowed opacity-50'
+                i === step
+                  ? "bg-primary text-primary-foreground"
+                  : i < step
+                    ? "bg-primary/20 text-primary"
+                    : "bg-secondary text-muted-foreground cursor-not-allowed opacity-50"
               }`}
             >
-              {i < step ? <Check className="w-3 h-3" /> : 
-               i === 0 ? <User className="w-3 h-3" /> : 
-               i === 1 ? <FileText className="w-3 h-3" /> : 
-               <Globe className="w-3 h-3" />}
+              {i < step ? (
+                <Check className="w-3 h-3" />
+              ) : i === 0 ? (
+                <User className="w-3 h-3" />
+              ) : i === 1 ? (
+                <FileText className="w-3 h-3" />
+              ) : (
+                <Globe className="w-3 h-3" />
+              )}
               {s}
             </button>
           ))}
@@ -391,21 +427,21 @@ const CompleteProfile = () => {
                 <Label>Full Name *</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     className="pl-9"
-                    placeholder="John Doe" 
-                    value={form.fullName || ''} 
-                    onChange={e => update("fullName", e.target.value)} 
+                    placeholder="John Doe"
+                    value={form.fullName || ""}
+                    onChange={(e) => update("fullName", e.target.value)}
                     required
                   />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label>Display Name *</Label>
-                <Input 
-                  placeholder="Your Name" 
-                  value={form.display_name} 
-                  onChange={e => update("display_name", e.target.value)} 
+                <Input
+                  placeholder="Your Name"
+                  value={form.display_name}
+                  onChange={(e) => update("display_name", e.target.value)}
                   required
                 />
               </div>
@@ -413,11 +449,11 @@ const CompleteProfile = () => {
                 <Label>Username *</Label>
                 <div className="relative">
                   <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     className="pl-9"
-                    placeholder="@yourhandle" 
-                    value={form.username} 
-                    onChange={e => update("username", e.target.value)} 
+                    placeholder="@yourhandle"
+                    value={form.username}
+                    onChange={(e) => update("username", e.target.value)}
                     required
                   />
                 </div>
@@ -427,18 +463,18 @@ const CompleteProfile = () => {
               </div>
             </>
           )}
-          
+
           {step === 1 && (
             <>
               <div className="space-y-2">
                 <Label>Bio *</Label>
                 <div className="relative">
                   <FileText className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                  <Textarea 
+                  <Textarea
                     className="pl-9"
-                    placeholder="Tell us about yourself and your content..." 
-                    value={form.bio} 
-                    onChange={e => update("bio", e.target.value)} 
+                    placeholder="Tell us about yourself and your content..."
+                    value={form.bio}
+                    onChange={(e) => update("bio", e.target.value)}
                     rows={4}
                     maxLength={500}
                     required
@@ -450,13 +486,18 @@ const CompleteProfile = () => {
               </div>
               <div className="space-y-2">
                 <Label>Niche *</Label>
-                <Select value={form.niche} onValueChange={v => update("niche", v)}>
+                <Select
+                  value={form.niche}
+                  onValueChange={(v) => update("niche", v)}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select your niche" />
                   </SelectTrigger>
                   <SelectContent>
-                    {niches.map(n => (
-                      <SelectItem key={n} value={n.toLowerCase()}>{n}</SelectItem>
+                    {niches.map((n) => (
+                      <SelectItem key={n} value={n.toLowerCase()}>
+                        {n}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -465,29 +506,29 @@ const CompleteProfile = () => {
                 <Label>Date of Birth *</Label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     className="pl-9"
-                    type="date" 
-                    value={form.dateOfBirth || ''} 
-                    onChange={e => update("dateOfBirth", e.target.value)} 
+                    type="date"
+                    value={form.dateOfBirth || ""}
+                    onChange={(e) => update("dateOfBirth", e.target.value)}
                     required
                   />
                 </div>
               </div>
             </>
           )}
-          
+
           {step === 2 && (
             <>
               <div className="space-y-2">
                 <Label>Location *</Label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     className="pl-9"
-                    placeholder="City, Country" 
-                    value={form.location} 
-                    onChange={e => update("location", e.target.value)} 
+                    placeholder="City, Country"
+                    value={form.location}
+                    onChange={(e) => update("location", e.target.value)}
                     required
                   />
                 </div>
@@ -496,13 +537,18 @@ const CompleteProfile = () => {
                 <Label>Preferred Language *</Label>
                 <div className="relative">
                   <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
-                  <Select value={form.language} onValueChange={v => update("language", v)}>
+                  <Select
+                    value={form.language}
+                    onValueChange={(v) => update("language", v)}
+                  >
                     <SelectTrigger className="pl-9">
                       <SelectValue placeholder="Select your preferred language" />
                     </SelectTrigger>
                     <SelectContent>
-                      {languages.map(l => (
-                        <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                      {languages.map((l) => (
+                        <SelectItem key={l.value} value={l.value}>
+                          {l.label}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -513,32 +559,54 @@ const CompleteProfile = () => {
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li className="flex items-start">
                     <span className="text-primary mr-2">•</span>
-                    <span>All fields are required to complete your profile</span>
+                    <span>
+                      All fields are required to complete your profile
+                    </span>
                   </li>
                   <li className="flex items-start">
                     <span className="text-primary mr-2">•</span>
-                    <span>You can update your information anytime from your profile settings</span>
+                    <span>
+                      You can update your information anytime from your profile
+                      settings
+                    </span>
                   </li>
                 </ul>
               </div>
             </>
           )}
 
-          <Button 
-            onClick={nextStep} 
-            className="w-full gradient-primary border-0" 
+          <Button
+            onClick={nextStep}
+            className="w-full gradient-primary border-0"
             disabled={isLoading || (step === 2 && completion < 100)}
           >
             {isLoading ? (
               <span className="flex items-center justify-center">
-                <svg className="animate-spin -ml-1 mr-3 h-4 w-4" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                <svg
+                  className="animate-spin -ml-1 mr-3 h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
                 </svg>
                 Saving...
               </span>
             ) : step < 2 ? (
-              <>Next <ArrowRight className="w-4 h-4 ml-1" /></>
+              <>
+                Next <ArrowRight className="w-4 h-4 ml-1" />
+              </>
             ) : (
               "Complete Profile"
             )}
