@@ -53,6 +53,7 @@ const App = () => (
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/auth/:provider/callback" element={<OAuthCallback />} />
+            <Route path="/oauth/:provider/callback" element={<OAuthCallback />} />
             <Route path="/complete-profile" element={<ProtectedRoute><CompleteProfile /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute requireProfileComplete><DashboardLayout /></ProtectedRoute>}>
               <Route index element={<Dashboard />} />
