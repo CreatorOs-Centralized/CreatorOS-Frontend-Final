@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import {
   BarChart,
@@ -7,12 +7,8 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
   AreaChart,
   Area,
-  Legend,
 } from "recharts";
 import {
   TrendingUp,
@@ -29,90 +25,85 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { contentApi, type ContentResponseDto } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  analyticsApi,
+  type DashboardPostItem,
+  type DashboardSummaryResponse,
+  type DashboardTrendItem,
+  type PlatformComparisonItem,
+} from "@/lib/api";
 
 const PLATFORMS = ["youtube", "instagram", "linkedin"] as const;
 
-type AnalyticsItem = {
-  postId: string;
-  platform: (typeof PLATFORMS)[number];
-  date: string;
-  views: number;
-  likes: number;
-  comments: number;
-  shares: number;
-};
-
 const Analytics = () => {
-  const [posts, setPosts] = useState<ContentResponseDto[]>([]);
-  const [analytics, setAnalytics] = useState<AnalyticsItem[]>([]);
+  const { user } = useAuth();
+
+  const [availablePosts, setAvailablePosts] = useState<DashboardPostItem[]>([]);
+  const [summary, setSummary] = useState<DashboardSummaryResponse>({
+    views: 0,
+    likes: 0,
+    comments: 0,
+    shares: 0,
+  });
+  const [trendData, setTrendData] = useState<DashboardTrendItem[]>([]);
+  const [platformComparison, setPlatformComparison] = useState<PlatformComparisonItem[]>([]);
 
   const [selectedPlatform, setSelectedPlatform] =
     useState<(typeof PLATFORMS)[number]>("youtube");
-  const [selectedPost, setSelectedPost] = useState<string>("");
+  const [selectedPost, setSelectedPost] = useState<string>("all");
 
   /* ---------------- LOAD POSTS ---------------- */
   useEffect(() => {
-    const load = async () => {
-      const data = await contentApi.getMyContents();
-      setPosts(data.filter((p) => p.workflowState === "PUBLISHED"));
+    if (!user?.id) return;
+    const loadPosts = async () => {
+      try {
+        const posts = await analyticsApi.getDashboardPosts({
+          userId: user.id,
+          platform: selectedPlatform,
+        });
+        setAvailablePosts(posts);
+      } catch (err) {
+        console.error("Failed to load posts", err);
+      }
     };
-    load();
-  }, []);
-
-  /* ---------------- FILTER POSTS BY PLATFORM ---------------- */
-  const platformPosts = useMemo(() => {
-    return posts.filter(
-      (p) => p.platform?.toLowerCase() === selectedPlatform
-    );
-  }, [posts, selectedPlatform]);
+    loadPosts();
+  }, [user?.id, selectedPlatform]);
 
   useEffect(() => {
-    setSelectedPost("");
+    setSelectedPost("all");
   }, [selectedPlatform]);
 
-  /* ---------------- FILTER ANALYTICS ---------------- */
-  const filteredAnalytics = useMemo(() => {
-    let data = analytics.filter(
-      (a) => a.platform === selectedPlatform
-    );
-    if (selectedPost) {
-      data = data.filter((a) => a.postId === selectedPost);
-    }
-    return data;
-  }, [analytics, selectedPlatform, selectedPost]);
+  /* ---------------- LOAD ANALYTICS ---------------- */
+  useEffect(() => {
+    if (!user?.id) return;
+    const loadAnalytics = async () => {
+      try {
+        const [summaryRes, trendRes, comparisonRes] = await Promise.all([
+          analyticsApi.getDashboardSummary({
+            userId: user.id,
+            platform: selectedPlatform,
+            postId: selectedPost !== "all" ? selectedPost : undefined,
+          }),
+          analyticsApi.getDashboardTrend({
+            userId: user.id,
+            platform: selectedPlatform,
+            postId: selectedPost !== "all" ? selectedPost : undefined,
+          }),
+          analyticsApi.getPlatformComparison({
+            userId: user.id,
+          }),
+        ]);
 
-  /* ---------------- TOTALS ---------------- */
-  const totals = useMemo(() => {
-    return {
-      views: filteredAnalytics.reduce((s, i) => s + i.views, 0),
-      likes: filteredAnalytics.reduce((s, i) => s + i.likes, 0),
-      comments: filteredAnalytics.reduce((s, i) => s + i.comments, 0),
-      shares: filteredAnalytics.reduce((s, i) => s + i.shares, 0),
+        setSummary(summaryRes);
+        setTrendData(trendRes);
+        setPlatformComparison(comparisonRes);
+      } catch (err) {
+        console.error("Failed to load analytics", err);
+      }
     };
-  }, [filteredAnalytics]);
-
-  /* ---------------- VIEWS TREND ---------------- */
-  const viewsTrendData = useMemo(() => {
-    return filteredAnalytics.map((a) => ({
-      date: a.date,
-      views: a.views,
-    }));
-  }, [filteredAnalytics]);
-
-  /* ---------------- PLATFORM COMPARISON ---------------- */
-  const platformComparison = useMemo(() => {
-    return PLATFORMS.map((platform) => {
-      const data = analytics.filter((a) => a.platform === platform);
-      return {
-        name: platform,
-        views: data.reduce((s, i) => s + i.views, 0),
-        likes: data.reduce((s, i) => s + i.likes, 0),
-        comments: data.reduce((s, i) => s + i.comments, 0),
-        shares: data.reduce((s, i) => s + i.shares, 0),
-      };
-    });
-  }, [analytics]);
+    loadAnalytics();
+  }, [user?.id, selectedPlatform, selectedPost]);
 
   const tooltipStyle = {
     backgroundColor: "hsl(240, 6%, 6%)",
@@ -135,7 +126,10 @@ const Analytics = () => {
         <div className="flex items-center gap-4 flex-wrap">
           <Filter className="w-4 h-4 text-muted-foreground" />
 
-          <Select value={selectedPlatform} onValueChange={(v) => setSelectedPlatform(v as any)}>
+          <Select
+            value={selectedPlatform}
+            onValueChange={(v) => setSelectedPlatform(v as any)}
+          >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Platform" />
             </SelectTrigger>
@@ -153,11 +147,10 @@ const Analytics = () => {
               <SelectValue placeholder="Post" />
             </SelectTrigger>
             <SelectContent>
-              {platformPosts.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.title.length > 35
-                    ? p.title.slice(0, 35) + "..."
-                    : p.title}
+              <SelectItem value="all">All Posts</SelectItem>
+              {availablePosts.map((p) => (
+                <SelectItem key={p.postId} value={p.postId}>
+                  {p.title.length > 35 ? p.title.slice(0, 35) + "..." : p.title}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -168,10 +161,10 @@ const Analytics = () => {
       {/* SUMMARY */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Views", value: totals.views, icon: Eye },
-          { label: "Likes", value: totals.likes, icon: Heart },
-          { label: "Comments", value: totals.comments, icon: MessageSquare },
-          { label: "Shares", value: totals.shares, icon: Share2 },
+          { label: "Views", value: summary.views, icon: Eye },
+          { label: "Likes", value: summary.likes, icon: Heart },
+          { label: "Comments", value: summary.comments, icon: MessageSquare },
+          { label: "Shares", value: summary.shares, icon: Share2 },
         ].map((s) => (
           <Card key={s.label} className="p-4 bg-card border-border">
             <s.icon className="w-4 h-4 mb-1" />
@@ -188,11 +181,15 @@ const Analytics = () => {
         </h2>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={viewsTrendData}>
+            <AreaChart data={trendData}>
               <XAxis dataKey="date" />
               <YAxis />
               <Tooltip contentStyle={tooltipStyle} />
-              <Area dataKey="views" stroke="hsl(263,70%,58%)" fillOpacity={0.3} />
+              <Area
+                dataKey="views"
+                stroke="hsl(263,70%,58%)"
+                fillOpacity={0.3}
+              />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -204,7 +201,7 @@ const Analytics = () => {
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={platformComparison}>
-              <XAxis dataKey="name" />
+              <XAxis dataKey="platform" />
               <YAxis />
               <Tooltip contentStyle={tooltipStyle} />
               <Bar dataKey="views" fill="hsl(263,70%,58%)" />
